@@ -10,11 +10,12 @@
   <div class="container">
     <header class="header">
       <h1>🎯 ScanVui</h1>
+      <span class="version">v2.0</span>
     </header>
     
     <div class="toolbar">
       <button id="scanBtn" class="btn btn-primary">
-        <span class="btn-icon">🔄</span> Scan Page
+        <span class="btn-icon">🔍</span> Scan Page
       </button>
       <button id="refreshBtn" class="btn btn-secondary" title="Refresh">
         <span class="btn-icon">↻</span>
@@ -32,28 +33,99 @@
     </div>
 
     <div id="results" class="results hidden">
-      <section class="summary-section">
+      <!-- Summary Section -->
+      <section class="section summary-section">
         <h2>📊 Summary</h2>
-        <div class="summary-grid" id="summaryGrid">
+        <div class="summary-grid" id="summaryGrid"></div>
+      </section>
+
+      <!-- Meta Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="metaSection">
+          <span class="section-toggle">▶</span>
+          <h2>🏷️ Meta Information</h2>
+        </div>
+        <div class="section-content" id="metaSection"></div>
+      </section>
+
+      <!-- Forms Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="formsWrapper">
+          <span class="section-toggle">▶</span>
+          <h2>📝 Forms Detail</h2>
+        </div>
+        <div class="section-content" id="formsWrapper">
+          <div id="formsContainer" class="forms-container"></div>
         </div>
       </section>
 
-      <section class="details-section">
-        <h2>📝 Forms Detail</h2>
-        <div id="formsContainer" class="forms-container">
+      <!-- Headings Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="headingsSection">
+          <span class="section-toggle">▶</span>
+          <h2>📰 Headings Structure</h2>
         </div>
+        <div class="section-content" id="headingsSection"></div>
       </section>
 
-      <section class="other-section">
-        <h2>🔗 Other Elements</h2>
-        <div id="otherElements" class="other-elements">
+      <!-- Media Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="mediaSection">
+          <span class="section-toggle">▶</span>
+          <h2>🎬 Media</h2>
         </div>
+        <div class="section-content" id="mediaSection"></div>
+      </section>
+
+      <!-- Navigation Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="navigationSection">
+          <span class="section-toggle">▶</span>
+          <h2>🧭 Navigation & Links</h2>
+        </div>
+        <div class="section-content" id="navigationSection"></div>
+      </section>
+
+      <!-- Semantic Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="semanticSection">
+          <span class="section-toggle">▶</span>
+          <h2>🏗️ Semantic Structure</h2>
+        </div>
+        <div class="section-content" id="semanticSection"></div>
+      </section>
+
+      <!-- Scripts Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="scriptsSection">
+          <span class="section-toggle">▶</span>
+          <h2>📜 Scripts & Styles</h2>
+        </div>
+        <div class="section-content" id="scriptsSection"></div>
+      </section>
+
+      <!-- Accessibility Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="accessibilitySection">
+          <span class="section-toggle">▶</span>
+          <h2>♿ Accessibility</h2>
+        </div>
+        <div class="section-content" id="accessibilitySection"></div>
+      </section>
+
+      <!-- Other Elements Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="otherElements">
+          <span class="section-toggle">▶</span>
+          <h2>🔧 Technical Details</h2>
+        </div>
+        <div class="section-content" id="otherElements"></div>
       </section>
     </div>
 
     <footer class="footer hidden" id="footer">
-      <button id="copyJsonBtn" class="btn btn-small">📋 Copy JSON</button>
-      <button id="copyTextBtn" class="btn btn-small">📄 Copy Text</button>
+      <button id="copyJsonBtn" class="btn btn-small">📋 JSON</button>
+      <button id="copyTextBtn" class="btn btn-small">📄 Markdown</button>
       <button id="downloadBtn" class="btn btn-small">💾 Download</button>
     </footer>
   </div>
