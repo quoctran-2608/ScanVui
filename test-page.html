@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Form Inspector Test Page</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+    .section { margin-bottom: 40px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+    h2 { color: #667eea; }
+    label { display: block; margin: 10px 0 5px; font-weight: bold; }
+    input, select, textarea { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+    button { background: #667eea; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #5a6fd6; }
+    .custom-input { border: 2px solid #764ba2; padding: 10px; min-height: 40px; }
+  </style>
+</head>
+<body>
+  <h1>Form Inspector Test Page</h1>
+  <p>Use this page to test the Get-Form Inspector Chrome Extension.</p>
+
+  <div class="section">
+    <h2>1. Basic Login Form</h2>
+    <form id="loginForm" name="Login Form" action="/login" method="POST">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" name="email" placeholder="Enter your email" required>
+      
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="Enter password" required minlength="8">
+      
+      <label>
+        <input type="checkbox" name="remember"> Remember me
+      </label>
+      
+      <button type="submit">Login</button>
+    </form>
+  </div>
+
+  <div class="section">
+    <h2>2. Contact Form with Various Input Types</h2>
+    <form id="contactForm" name="Contact Form" action="/contact" method="POST">
+      <label for="fullname">Full Name</label>
+      <input type="text" id="fullname" name="fullname" required pattern="[A-Za-z ]+" aria-describedby="nameHelp">
+      <small id="nameHelp">Letters and spaces only</small>
+      
+      <label for="phone">Phone Number</label>
+      <input type="tel" id="phone" name="phone" placeholder="+1 (555) 123-4567">
+      
+      <label for="website">Website URL</label>
+      <input type="url" id="website" name="website" placeholder="https://example.com">
+      
+      <label for="age">Age</label>
+      <input type="number" id="age" name="age" min="18" max="120">
+      
+      <label for="birthdate">Birth Date</label>
+      <input type="date" id="birthdate" name="birthdate">
+      
+      <label for="meeting">Preferred Meeting Time</label>
+      <input type="datetime-local" id="meeting" name="meeting">
+      
+      <label for="color">Favorite Color</label>
+      <input type="color" id="color" name="color" value="#667eea">
+      
+      <label for="satisfaction">Satisfaction Level</label>
+      <input type="range" id="satisfaction" name="satisfaction" min="0" max="100" value="50">
+      
+      <label for="country">Country</label>
+      <select id="country" name="country" required>
+        <option value="">Select a country</option>
+        <option value="us">United States</option>
+        <option value="uk">United Kingdom</option>
+        <option value="vn">Vietnam</option>
+        <option value="jp">Japan</option>
+      </select>
+      
+      <label for="message">Message</label>
+      <textarea id="message" name="message" rows="4" placeholder="Your message here..." maxlength="500"></textarea>
+      
+      <label for="file">Upload File</label>
+      <input type="file" id="file" name="file" accept=".pdf,.doc,.docx">
+      
+      <button type="submit">Send Message</button>
+      <button type="reset">Clear Form</button>
+    </form>
+  </div>
+
+  <div class="section">
+    <h2>3. ARIA & Custom Elements</h2>
+    
+    <label id="searchLabel">Search (role="searchbox")</label>
+    <div role="searchbox" aria-labelledby="searchLabel" contenteditable="true" class="custom-input" tabindex="0">
+      Type to search...
+    </div>
+    
+    <br><br>
+    
+    <label id="editorLabel">Rich Text Editor (contenteditable)</label>
+    <div contenteditable="true" aria-label="Rich text editor" class="custom-input" style="min-height: 100px;">
+      <p>This is an editable area...</p>
+    </div>
+    
+    <br>
+    
+    <div role="textbox" aria-label="Custom textbox" class="custom-input" contenteditable="true">
+      Custom textbox with role
+    </div>
+    
+    <br><br>
+    
+    <button role="button" aria-label="Custom action button">
+      Custom Button
+    </button>
+  </div>
+
+  <div class="section">
+    <h2>4. Standalone Inputs (No Form)</h2>
+    <label for="searchInput">Search</label>
+    <input type="search" id="searchInput" placeholder="Search the site...">
+    
+    <label for="newsletter">Newsletter Email</label>
+    <input type="email" id="newsletter" placeholder="Subscribe to newsletter">
+    <button onclick="alert('Subscribed!')">Subscribe</button>
+  </div>
+
+  <div class="section">
+    <h2>5. Disabled and Readonly Fields</h2>
+    <form id="readonlyForm">
+      <label for="username">Username (readonly)</label>
+      <input type="text" id="username" name="username" value="john_doe" readonly>
+      
+      <label for="accountId">Account ID (disabled)</label>
+      <input type="text" id="accountId" name="accountId" value="ACC-12345" disabled>
+      
+      <label for="status">Status (disabled select)</label>
+      <select id="status" name="status" disabled>
+        <option value="active" selected>Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </form>
+  </div>
+
+  <div class="section">
+    <h2>6. Hidden Fields</h2>
+    <form id="hiddenForm">
+      <input type="hidden" name="csrf_token" value="abc123xyz">
+      <input type="hidden" name="form_version" value="2.0">
+      <p>This form has 2 hidden fields (csrf_token, form_version). They should NOT appear in the scan results.</p>
+      <label for="visibleField">Visible Field</label>
+      <input type="text" id="visibleField" name="visible" placeholder="This should appear">
+    </form>
+  </div>
+
+  <div class="section">
+    <h2>7. Page Elements Summary</h2>
+    <h3>Sub-heading H3</h3>
+    <h4>Sub-sub-heading H4</h4>
+    
+    <p>This page contains:</p>
+    <ul>
+      <li>Multiple forms with various input types</li>
+      <li>ARIA-labeled elements</li>
+      <li>Contenteditable elements</li>
+      <li>Links and buttons</li>
+    </ul>
+    
+    <table border="1" cellpadding="10">
+      <tr><th>Feature</th><th>Status</th></tr>
+      <tr><td>Basic Forms</td><td>Yes</td></tr>
+      <tr><td>ARIA Support</td><td>Yes</td></tr>
+      <tr><td>Shadow DOM</td><td>No (static page)</td></tr>
+    </table>
+    
+    <p>
+      <a href="https://example.com">Example Link 1</a> |
+      <a href="https://google.com">Example Link 2</a> |
+      <a href="#top">Back to Top</a>
+    </p>
+    
+    <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect fill='%23667eea' width='100' height='100'/></svg>" alt="Test Image" width="100" height="100">
+  </div>
+
+  <script>
+    console.log('Test page loaded. Open the Get-Form Inspector extension to scan this page.');
+  </script>
+</body>
+</html>
