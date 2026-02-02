@@ -6,11 +6,17 @@
   <title>ScanVui</title>
   <link rel="stylesheet" href="popup.css">
 </head>
-<body>
+<body data-theme="light">
   <div class="container">
     <header class="header">
-      <h1>🎯 ScanVui</h1>
-      <span class="version">v2.0</span>
+      <div class="header-title">
+        <img src="../../icons/icon48.png" alt="ScanVui" class="header-logo">
+        <h1>ScanVui</h1>
+      </div>
+      <div class="header-actions">
+        <button id="themeToggle" class="btn-icon-only" title="Toggle theme">🌙</button>
+        <span class="version">v2.1</span>
+      </div>
     </header>
     
     <div class="toolbar">
@@ -20,6 +26,23 @@
       <button id="refreshBtn" class="btn btn-secondary" title="Refresh">
         <span class="btn-icon">↻</span>
       </button>
+    </div>
+
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="🔎 Search results..." class="search-input">
+    </div>
+
+    <!-- Welcome Screen -->
+    <div id="welcomeScreen" class="welcome-screen">
+      <div class="welcome-icon">🔍😊</div>
+      <h2>Welcome to ScanVui!</h2>
+      <p>Click <strong>Scan Page</strong> to analyze the current webpage.</p>
+      <div class="welcome-features">
+        <div class="feature-item">📊 SEO & Accessibility Scores</div>
+        <div class="feature-item">📝 Forms & Fields Detection</div>
+        <div class="feature-item">🎯 Element Highlighting</div>
+        <div class="feature-item">📋 Export to JSON/Markdown</div>
+      </div>
     </div>
 
     <div id="loading" class="loading hidden">
@@ -33,6 +56,11 @@
     </div>
 
     <div id="results" class="results hidden">
+      <!-- Score Section -->
+      <section class="section score-section">
+        <div id="scoreSection"></div>
+      </section>
+
       <!-- Summary Section -->
       <section class="section summary-section">
         <h2>📊 Summary</h2>
@@ -111,6 +139,15 @@
           <h2>♿ Accessibility</h2>
         </div>
         <div class="section-content" id="accessibilitySection"></div>
+      </section>
+
+      <!-- Storage Section -->
+      <section class="section collapsible">
+        <div class="section-header" data-target="storageSection">
+          <span class="section-toggle">▶</span>
+          <h2>💾 Storage</h2>
+        </div>
+        <div class="section-content" id="storageSection"></div>
       </section>
 
       <!-- Other Elements Section -->

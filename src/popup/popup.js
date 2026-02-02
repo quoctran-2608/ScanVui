@@ -1,12 +1,16 @@
 class PopupController {
   constructor() {
     this.scanData = null;
+    this.filteredData = null;
+    this.sectionsInitialized = false;
     this.init();
   }
 
   init() {
     this.bindElements();
     this.bindEvents();
+    this.loadLastScan();
+    this.initTheme();
   }
 
   bindElements() {
@@ -23,6 +27,10 @@ class PopupController {
     this.copyJsonBtn = document.getElementById('copyJsonBtn');
     this.copyTextBtn = document.getElementById('copyTextBtn');
     this.downloadBtn = document.getElementById('downloadBtn');
+    this.welcomeScreen = document.getElementById('welcomeScreen');
+    this.searchInput = document.getElementById('searchInput');
+    this.themeToggle = document.getElementById('themeToggle');
+    this.scoreSection = document.getElementById('scoreSection');
   }
 
   bindEvents() {
@@ -31,9 +39,76 @@ class PopupController {
     this.copyJsonBtn.addEventListener('click', () => this.copyAsJson());
     this.copyTextBtn.addEventListener('click', () => this.copyAsText());
     this.downloadBtn.addEventListener('click', () => this.downloadJson());
+    
+    if (this.searchInput) {
+      this.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+    }
+    
+    if (this.themeToggle) {
+      this.themeToggle.addEventListener('click', () => this.toggleTheme());
+    }
+  }
+
+  escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+  }
+
+  initTheme() {
+    const savedTheme = localStorage.getItem('scanvui-theme') || 'light';
+    document.body.setAttribute('data-theme', savedTheme);
+    this.updateThemeIcon(savedTheme);
+  }
+
+  toggleTheme() {
+    const currentTheme = document.body.getAttribute('data-theme') || 'light';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    document.body.setAttribute('data-theme', newTheme);
+    localStorage.setItem('scanvui-theme', newTheme);
+    this.updateThemeIcon(newTheme);
+  }
+
+  updateThemeIcon(theme) {
+    if (this.themeToggle) {
+      this.themeToggle.innerHTML = theme === 'light' ? '🌙' : '☀️';
+      this.themeToggle.title = theme === 'light' ? 'Dark mode' : 'Light mode';
+    }
+  }
+
+  async loadLastScan() {
+    try {
+      const result = await chrome.storage.local.get(['lastScan', 'lastScanUrl']);
+      if (result.lastScan) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && tab.url === result.lastScanUrl) {
+          this.showResults(result.lastScan, false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('No previous scan data');
+    }
+    this.showWelcome();
+  }
+
+  showWelcome() {
+    if (this.welcomeScreen) {
+      this.welcomeScreen.classList.remove('hidden');
+    }
+    this.results.classList.add('hidden');
+    this.footer.classList.add('hidden');
+  }
+
+  hideWelcome() {
+    if (this.welcomeScreen) {
+      this.welcomeScreen.classList.add('hidden');
+    }
   }
 
   showLoading() {
+    this.hideWelcome();
     this.loading.classList.remove('hidden');
     this.error.classList.add('hidden');
     this.results.classList.add('hidden');
@@ -52,9 +127,17 @@ class PopupController {
     this.error.classList.remove('hidden');
   }
 
-  showResults(data) {
+  showResults(data, saveToStorage = true) {
     this.hideLoading();
+    this.hideWelcome();
     this.scanData = data;
+    this.filteredData = data;
+    
+    if (saveToStorage) {
+      this.saveScanData(data);
+    }
+    
+    this.renderScoreSection(data);
     this.renderSummary(data);
     this.renderForms(data.forms);
     this.renderOtherElements(data);
@@ -65,17 +148,38 @@ class PopupController {
     this.renderAccessibilitySection(data);
     this.renderMetaSection(data);
     this.renderHeadingsSection(data);
-    this.bindCollapsibleSections();
+    this.renderStorageSection(data);
+    
+    if (!this.sectionsInitialized) {
+      this.bindCollapsibleSections();
+      this.sectionsInitialized = true;
+    }
+    
     this.results.classList.remove('hidden');
     this.footer.classList.remove('hidden');
   }
 
+  async saveScanData(data) {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.storage.local.set({
+        lastScan: data,
+        lastScanUrl: tab?.url || ''
+      });
+    } catch (e) {
+      console.error('Failed to save scan data:', e);
+    }
+  }
+
   bindCollapsibleSections() {
     document.querySelectorAll('.section-header').forEach(header => {
-      header.addEventListener('click', () => {
-        const targetId = header.dataset.target;
+      const newHeader = header.cloneNode(true);
+      header.parentNode.replaceChild(newHeader, header);
+      
+      newHeader.addEventListener('click', () => {
+        const targetId = newHeader.dataset.target;
         const content = document.getElementById(targetId);
-        const toggle = header.querySelector('.section-toggle');
+        const toggle = newHeader.querySelector('.section-toggle');
         if (content && toggle) {
           content.classList.toggle('expanded');
           toggle.classList.toggle('expanded');
@@ -84,24 +188,251 @@ class PopupController {
     });
   }
 
+  calculateScores(data) {
+    const scores = {
+      seo: { score: 0, max: 100, issues: [] },
+      accessibility: { score: 0, max: 100, issues: [] },
+      performance: { score: 0, max: 100, issues: [] },
+      bestPractices: { score: 0, max: 100, issues: [] }
+    };
+
+    // SEO Score
+    let seoPoints = 0;
+    if (data.meta?.title) seoPoints += 15; else scores.seo.issues.push('Missing title');
+    if (data.meta?.description) seoPoints += 15; else scores.seo.issues.push('Missing meta description');
+    if (data.meta?.canonical) seoPoints += 10; else scores.seo.issues.push('Missing canonical URL');
+    if (data.headings?.some(h => h.level === 'H1')) seoPoints += 15; else scores.seo.issues.push('Missing H1 heading');
+    if (data.meta?.openGraph?.length > 0) seoPoints += 10; else scores.seo.issues.push('Missing Open Graph tags');
+    if (data.meta?.viewport) seoPoints += 10; else scores.seo.issues.push('Missing viewport meta');
+    if (data.meta?.language) seoPoints += 10; else scores.seo.issues.push('Missing lang attribute');
+    if (data.media?.images?.withAlt === data.media?.images?.total) seoPoints += 15; 
+    else if (data.media?.images?.total > 0) scores.seo.issues.push(`${data.media?.images?.withoutAlt || 0} images missing alt text`);
+    scores.seo.score = Math.min(100, seoPoints);
+
+    // Accessibility Score
+    let a11yPoints = 0;
+    const a11y = data.accessibility || {};
+    if (a11y.langAttribute) a11yPoints += 15; else scores.accessibility.issues.push('Missing lang attribute');
+    if (a11y.skipLinks > 0) a11yPoints += 10; else scores.accessibility.issues.push('No skip links');
+    if (a11y.labels >= data.totalFields * 0.8) a11yPoints += 20; else scores.accessibility.issues.push('Many form fields missing labels');
+    if (a11y.altTextCoverage >= 90) a11yPoints += 20; else scores.accessibility.issues.push(`Alt text coverage: ${a11y.altTextCoverage || 0}%`);
+    if (a11y.ariaLabels > 0 || a11y.ariaRoles > 0) a11yPoints += 15;
+    if (data.headings?.length > 0) a11yPoints += 10;
+    if (data.semantic?.main > 0) a11yPoints += 10; else scores.accessibility.issues.push('Missing <main> landmark');
+    scores.accessibility.score = Math.min(100, a11yPoints);
+
+    // Performance Score
+    let perfPoints = 100;
+    const perf = data.performance || {};
+    if (perf.domElements > 1500) { perfPoints -= 20; scores.performance.issues.push(`High DOM count: ${perf.domElements}`); }
+    if (perf.domDepth > 15) { perfPoints -= 10; scores.performance.issues.push(`Deep DOM: ${perf.domDepth} levels`); }
+    if (perf.inlineStyles > 50) { perfPoints -= 15; scores.performance.issues.push(`Many inline styles: ${perf.inlineStyles}`); }
+    if (perf.imagesWithoutDimensions > 5) { perfPoints -= 15; scores.performance.issues.push(`Images without dimensions: ${perf.imagesWithoutDimensions}`); }
+    if ((data.scripts?.total || 0) > 30) { perfPoints -= 15; scores.performance.issues.push(`Many scripts: ${data.scripts?.total}`); }
+    if ((data.scripts?.inline || 0) > 10) { perfPoints -= 10; scores.performance.issues.push(`Many inline scripts: ${data.scripts?.inline}`); }
+    scores.performance.score = Math.max(0, perfPoints);
+
+    // Best Practices Score
+    let bpPoints = 100;
+    if (perf.deprecatedElements > 0) { bpPoints -= 20; scores.bestPractices.issues.push(`Deprecated elements: ${perf.deprecatedElements}`); }
+    if (!data.meta?.charset) { bpPoints -= 10; scores.bestPractices.issues.push('Missing charset'); }
+    if (!data.meta?.favicon) { bpPoints -= 10; scores.bestPractices.issues.push('Missing favicon'); }
+    if ((data.iframes?.total || 0) > 5) { bpPoints -= 10; scores.bestPractices.issues.push(`Many iframes: ${data.iframes?.total}`); }
+    const externalLinks = data.navigation?.externalLinks || 0;
+    const linksWithoutRel = data.links?.filter(l => l.type === 'external' && !l.rel?.includes('noopener'))?.length || 0;
+    if (linksWithoutRel > 0) { bpPoints -= 15; scores.bestPractices.issues.push('External links missing rel="noopener"'); }
+    scores.bestPractices.score = Math.max(0, bpPoints);
+
+    return scores;
+  }
+
+  renderScoreSection(data) {
+    const container = document.getElementById('scoreSection');
+    if (!container) return;
+
+    const scores = this.calculateScores(data);
+    const overall = Math.round((scores.seo.score + scores.accessibility.score + scores.performance.score + scores.bestPractices.score) / 4);
+
+    const getScoreClass = (score) => {
+      if (score >= 80) return 'good';
+      if (score >= 50) return 'warning';
+      return 'poor';
+    };
+
+    const getScoreEmoji = (score) => {
+      if (score >= 80) return '✅';
+      if (score >= 50) return '⚠️';
+      return '❌';
+    };
+
+    container.innerHTML = `
+      <div class="overall-score ${getScoreClass(overall)}">
+        <div class="overall-score-value">${overall}</div>
+        <div class="overall-score-label">Overall Score</div>
+      </div>
+      <div class="score-grid">
+        <div class="score-item" title="${scores.seo.issues.join('\\n') || 'Good!'}">
+          <div class="score-header">
+            <span>${getScoreEmoji(scores.seo.score)} SEO</span>
+            <span class="score-value ${getScoreClass(scores.seo.score)}">${scores.seo.score}</span>
+          </div>
+          <div class="score-bar"><div class="score-fill ${getScoreClass(scores.seo.score)}" style="width: ${scores.seo.score}%"></div></div>
+        </div>
+        <div class="score-item" title="${scores.accessibility.issues.join('\\n') || 'Good!'}">
+          <div class="score-header">
+            <span>${getScoreEmoji(scores.accessibility.score)} Accessibility</span>
+            <span class="score-value ${getScoreClass(scores.accessibility.score)}">${scores.accessibility.score}</span>
+          </div>
+          <div class="score-bar"><div class="score-fill ${getScoreClass(scores.accessibility.score)}" style="width: ${scores.accessibility.score}%"></div></div>
+        </div>
+        <div class="score-item" title="${scores.performance.issues.join('\\n') || 'Good!'}">
+          <div class="score-header">
+            <span>${getScoreEmoji(scores.performance.score)} Performance</span>
+            <span class="score-value ${getScoreClass(scores.performance.score)}">${scores.performance.score}</span>
+          </div>
+          <div class="score-bar"><div class="score-fill ${getScoreClass(scores.performance.score)}" style="width: ${scores.performance.score}%"></div></div>
+        </div>
+        <div class="score-item" title="${scores.bestPractices.issues.join('\\n') || 'Good!'}">
+          <div class="score-header">
+            <span>${getScoreEmoji(scores.bestPractices.score)} Best Practices</span>
+            <span class="score-value ${getScoreClass(scores.bestPractices.score)}">${scores.bestPractices.score}</span>
+          </div>
+          <div class="score-bar"><div class="score-fill ${getScoreClass(scores.bestPractices.score)}" style="width: ${scores.bestPractices.score}%"></div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  handleSearch(query) {
+    query = query.toLowerCase().trim();
+    
+    document.querySelectorAll('.field-item, .other-item, .meta-item, .heading-item').forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(query) || query === '' ? '' : 'none';
+    });
+
+    document.querySelectorAll('.form-card').forEach(card => {
+      const text = card.textContent.toLowerCase();
+      card.style.display = text.includes(query) || query === '' ? '' : 'none';
+    });
+  }
+
   renderHeadingsSection(data) {
     const container = document.getElementById('headingsSection');
     if (!container) return;
 
     if (!data.headings || data.headings.length === 0) {
-      container.innerHTML = '<p style="color: #888; font-size: 12px;">No headings found on this page.</p>';
+      container.innerHTML = '<p class="empty-message">No headings found on this page.</p>';
       return;
     }
 
     container.innerHTML = data.headings.map(h => {
       const level = h.level.toLowerCase();
       return `
-        <div class="heading-item ${level}">
-          <span class="heading-level">${h.level}</span>
-          <span class="heading-text">${h.text || '(empty)'}</span>
+        <div class="heading-item ${level}" data-element-selector="${this.escapeHtml(h.id ? '#' + h.id : h.level)}">
+          <span class="heading-level">${this.escapeHtml(h.level)}</span>
+          <span class="heading-text">${this.escapeHtml(h.text) || '(empty)'}</span>
         </div>
       `;
     }).join('');
+
+    this.bindHighlightEvents(container);
+  }
+
+  bindHighlightEvents(container) {
+    container.querySelectorAll('[data-element-selector]').forEach(item => {
+      item.addEventListener('mouseenter', () => {
+        const selector = item.dataset.elementSelector;
+        this.highlightElement(selector);
+      });
+      item.addEventListener('mouseleave', () => {
+        this.removeHighlight();
+      });
+      item.addEventListener('click', () => {
+        const selector = item.dataset.elementSelector;
+        this.scrollToElement(selector);
+      });
+    });
+  }
+
+  async highlightElement(selector) {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (sel) => {
+          const existing = document.getElementById('scanvui-highlight');
+          if (existing) existing.remove();
+
+          let element = null;
+          try {
+            element = document.querySelector(sel);
+          } catch (e) {
+            const elements = document.querySelectorAll(sel);
+            if (elements.length > 0) element = elements[0];
+          }
+
+          if (element) {
+            const rect = element.getBoundingClientRect();
+            const highlight = document.createElement('div');
+            highlight.id = 'scanvui-highlight';
+            highlight.style.cssText = `
+              position: fixed;
+              top: ${rect.top - 4}px;
+              left: ${rect.left - 4}px;
+              width: ${rect.width + 8}px;
+              height: ${rect.height + 8}px;
+              border: 3px solid #667eea;
+              background: rgba(102, 126, 234, 0.15);
+              border-radius: 4px;
+              pointer-events: none;
+              z-index: 999999;
+              transition: all 0.2s ease;
+              box-shadow: 0 0 20px rgba(102, 126, 234, 0.4);
+            `;
+            document.body.appendChild(highlight);
+          }
+        },
+        args: [selector]
+      });
+    } catch (e) {
+      console.log('Highlight failed:', e);
+    }
+  }
+
+  async removeHighlight() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          const existing = document.getElementById('scanvui-highlight');
+          if (existing) existing.remove();
+        }
+      });
+    } catch (e) {}
+  }
+
+  async scrollToElement(selector) {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (sel) => {
+          let element = null;
+          try {
+            element = document.querySelector(sel);
+          } catch (e) {
+            const elements = document.querySelectorAll(sel);
+            if (elements.length > 0) element = elements[0];
+          }
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        },
+        args: [selector]
+      });
+    } catch (e) {}
   }
 
   async scanPage() {
@@ -151,7 +482,7 @@ class PopupController {
       <div class="summary-item">
         <span class="summary-icon">${item.icon}</span>
         <div class="summary-info">
-          <span class="summary-label">${item.label}</span>
+          <span class="summary-label">${this.escapeHtml(item.label)}</span>
           <span class="summary-value">${item.value}</span>
         </div>
       </div>
@@ -160,7 +491,7 @@ class PopupController {
 
   renderForms(forms) {
     if (forms.length === 0) {
-      this.formsContainer.innerHTML = '<p style="color: #888; font-size: 12px;">No forms detected on this page.</p>';
+      this.formsContainer.innerHTML = '<p class="empty-message">No forms detected on this page.</p>';
       return;
     }
 
@@ -168,12 +499,12 @@ class PopupController {
       <div class="form-card">
         <div class="form-header" data-form-index="${index}">
           <span class="form-toggle">▶</span>
-          <span class="form-title">${form.name || `Form #${index + 1}`}</span>
+          <span class="form-title">${this.escapeHtml(form.name) || `Form #${index + 1}`}</span>
           <span class="form-badge">${form.fields.length} fields</span>
-          ${form.method ? `<span class="form-method">${form.method}</span>` : ''}
+          ${form.method ? `<span class="form-method">${this.escapeHtml(form.method)}</span>` : ''}
         </div>
         <div class="form-fields" id="form-fields-${index}">
-          ${form.action ? `<div class="form-action">Action: ${form.action}</div>` : ''}
+          ${form.action ? `<div class="form-action">Action: ${this.escapeHtml(form.action)}</div>` : ''}
           ${this.renderFields(form.fields)}
         </div>
       </div>
@@ -186,14 +517,14 @@ class PopupController {
 
   renderFields(fields) {
     if (fields.length === 0) {
-      return '<p style="color: #888; font-size: 11px;">No fields in this form.</p>';
+      return '<p class="empty-message">No fields in this form.</p>';
     }
 
     return fields.map(field => {
       const icon = this.getFieldIcon(field.type);
       const tags = [];
       
-      if (field.type) tags.push(`<span class="field-tag type">${field.type}</span>`);
+      if (field.type) tags.push(`<span class="field-tag type">${this.escapeHtml(field.type)}</span>`);
       if (field.required) tags.push(`<span class="field-tag required">required</span>`);
       if (field.pattern) tags.push(`<span class="field-tag">pattern</span>`);
       if (field.minLength || field.maxLength) tags.push(`<span class="field-tag">length</span>`);
@@ -201,13 +532,15 @@ class PopupController {
       if (field.disabled) tags.push(`<span class="field-tag disabled">disabled</span>`);
       if (field.readonly) tags.push(`<span class="field-tag">readonly</span>`);
 
+      const selector = field.id ? `#${field.id}` : (field.name ? `[name="${field.name}"]` : field.tag);
+
       return `
-        <div class="field-item">
+        <div class="field-item" data-element-selector="${this.escapeHtml(selector)}">
           <span class="field-icon">${icon}</span>
           <div class="field-info">
-            <div class="field-name">${field.label || field.name || field.id || field.placeholder || '(unnamed)'}</div>
-            ${field.name ? `<div class="field-attr">name: ${field.name}</div>` : ''}
-            ${field.id ? `<div class="field-attr">id: ${field.id}</div>` : ''}
+            <div class="field-name">${this.escapeHtml(field.label || field.name || field.id || field.placeholder) || '(unnamed)'}</div>
+            ${field.name ? `<div class="field-attr">name: ${this.escapeHtml(field.name)}</div>` : ''}
+            ${field.id ? `<div class="field-attr">id: ${this.escapeHtml(field.id)}</div>` : ''}
             <div class="field-meta">${tags.join('')}</div>
           </div>
         </div>
@@ -217,26 +550,11 @@ class PopupController {
 
   getFieldIcon(type) {
     const icons = {
-      'text': '📝',
-      'email': '📧',
-      'password': '🔒',
-      'number': '🔢',
-      'tel': '📞',
-      'url': '🌐',
-      'date': '📅',
-      'datetime-local': '📅',
-      'time': '🕐',
-      'file': '📎',
-      'checkbox': '☑️',
-      'radio': '🔘',
-      'select': '📋',
-      'textarea': '📄',
-      'hidden': '👁️‍🗨️',
-      'submit': '✅',
-      'button': '🔲',
-      'search': '🔍',
-      'color': '🎨',
-      'range': '📊'
+      'text': '📝', 'email': '📧', 'password': '🔒', 'number': '🔢',
+      'tel': '📞', 'url': '🌐', 'date': '📅', 'datetime-local': '📅',
+      'time': '🕐', 'file': '📎', 'checkbox': '☑️', 'radio': '🔘',
+      'select': '📋', 'textarea': '📄', 'hidden': '👁️', 'submit': '✅',
+      'button': '🔲', 'search': '🔍', 'color': '🎨', 'range': '📊'
     };
     return icons[type] || '📝';
   }
@@ -248,6 +566,10 @@ class PopupController {
     
     fields.classList.toggle('expanded');
     toggle.classList.toggle('expanded');
+
+    if (fields.classList.contains('expanded')) {
+      this.bindHighlightEvents(fields);
+    }
   }
 
   renderOtherElements(data) {
@@ -274,7 +596,7 @@ class PopupController {
     if (!container || !data.media) return;
 
     const items = [
-      { icon: '🖼️', label: 'Images', count: data.media.images?.total || 0, details: data.media.images?.withAlt + ' with alt' },
+      { icon: '🖼️', label: 'Images', count: data.media.images?.total || 0, details: `${data.media.images?.withAlt || 0} with alt` },
       { icon: '🎬', label: 'Videos', count: data.media.videos?.total || 0 },
       { icon: '🎵', label: 'Audio', count: data.media.audio?.total || 0 },
       { icon: '📐', label: 'SVGs', count: data.media.svg?.total || 0 },
@@ -342,7 +664,10 @@ class PopupController {
     if (!container || !data.scripts) return;
 
     const scripts = data.scripts;
+    const stylesheets = data.stylesheets || {};
+    
     container.innerHTML = `
+      <div class="subsection-title">Scripts</div>
       <div class="other-item">
         <span class="other-icon">📜</span>
         <span class="other-label">Total Scripts</span>
@@ -363,6 +688,27 @@ class PopupController {
         <span class="other-label">Modules</span>
         <span class="other-count">${scripts.modules || 0}</span>
       </div>
+      <div class="other-item">
+        <span class="other-icon">⚡</span>
+        <span class="other-label">Async/Defer</span>
+        <span class="other-count">${(scripts.async || 0) + (scripts.defer || 0)}</span>
+      </div>
+      <div class="subsection-title">Stylesheets</div>
+      <div class="other-item">
+        <span class="other-icon">🎨</span>
+        <span class="other-label">Total</span>
+        <span class="other-count">${stylesheets.total || 0}</span>
+      </div>
+      <div class="other-item">
+        <span class="other-icon">🔗</span>
+        <span class="other-label">External</span>
+        <span class="other-count">${stylesheets.external || 0}</span>
+      </div>
+      <div class="other-item">
+        <span class="other-icon">📝</span>
+        <span class="other-label">Inline</span>
+        <span class="other-count">${stylesheets.inline || 0}</span>
+      </div>
     `;
   }
 
@@ -371,7 +717,17 @@ class PopupController {
     if (!container || !data.accessibility) return;
 
     const a11y = data.accessibility;
+    const coverage = a11y.altTextCoverage || 0;
+    const coverageClass = coverage >= 90 ? 'good' : coverage >= 50 ? 'warning' : 'poor';
+
     container.innerHTML = `
+      <div class="a11y-coverage">
+        <span>Alt Text Coverage</span>
+        <div class="coverage-bar">
+          <div class="coverage-fill ${coverageClass}" style="width: ${coverage}%"></div>
+        </div>
+        <span class="coverage-value">${coverage}%</span>
+      </div>
       <div class="other-item">
         <span class="other-icon">🏷️</span>
         <span class="other-label">ARIA Labels</span>
@@ -389,7 +745,7 @@ class PopupController {
       </div>
       <div class="other-item">
         <span class="other-icon">🏷️</span>
-        <span class="other-label">Labels</span>
+        <span class="other-label">Form Labels</span>
         <span class="other-count">${a11y.labels || 0}</span>
       </div>
       <div class="other-item ${a11y.skipLinks > 0 ? 'success' : 'warning'}">
@@ -413,19 +769,35 @@ class PopupController {
     container.innerHTML = `
       <div class="meta-item">
         <span class="meta-label">Title</span>
-        <span class="meta-value">${meta.title || '(none)'}</span>
+        <span class="meta-value">${this.escapeHtml(meta.title) || '<em>(none)</em>'}</span>
       </div>
       <div class="meta-item">
         <span class="meta-label">Description</span>
-        <span class="meta-value">${meta.description || '(none)'}</span>
+        <span class="meta-value">${this.escapeHtml(meta.description) || '<em>(none)</em>'}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Keywords</span>
+        <span class="meta-value">${this.escapeHtml(meta.keywords) || '<em>(none)</em>'}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Author</span>
+        <span class="meta-value">${this.escapeHtml(meta.author) || '<em>(none)</em>'}</span>
       </div>
       <div class="meta-item">
         <span class="meta-label">Viewport</span>
-        <span class="meta-value">${meta.viewport ? 'Yes' : 'No'}</span>
+        <span class="meta-value">${this.escapeHtml(meta.viewport) || '<em>(none)</em>'}</span>
       </div>
       <div class="meta-item">
         <span class="meta-label">Charset</span>
-        <span class="meta-value">${meta.charset || '(none)'}</span>
+        <span class="meta-value">${this.escapeHtml(meta.charset) || '<em>(none)</em>'}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Language</span>
+        <span class="meta-value">${this.escapeHtml(meta.language) || '<em>(none)</em>'}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Canonical</span>
+        <span class="meta-value">${meta.canonical ? 'Yes' : '<em>No</em>'}</span>
       </div>
       <div class="meta-item">
         <span class="meta-label">Open Graph</span>
@@ -436,12 +808,36 @@ class PopupController {
         <span class="meta-value">${meta.twitterCards?.length || 0} tags</span>
       </div>
       <div class="meta-item">
-        <span class="meta-label">Canonical URL</span>
-        <span class="meta-value">${meta.canonical ? 'Yes' : 'No'}</span>
+        <span class="meta-label">Structured Data</span>
+        <span class="meta-value">${meta.structuredData?.length || 0} schemas</span>
       </div>
       <div class="meta-item">
         <span class="meta-label">Favicon</span>
-        <span class="meta-value">${meta.favicon ? 'Yes' : 'No'}</span>
+        <span class="meta-value">${meta.favicon ? 'Yes' : '<em>No</em>'}</span>
+      </div>
+    `;
+  }
+
+  renderStorageSection(data) {
+    const container = document.getElementById('storageSection');
+    if (!container || !data.storage) return;
+
+    const storage = data.storage;
+    container.innerHTML = `
+      <div class="other-item">
+        <span class="other-icon">🍪</span>
+        <span class="other-label">Cookies</span>
+        <span class="other-count">${storage.cookies || 0}</span>
+      </div>
+      <div class="other-item">
+        <span class="other-icon">💾</span>
+        <span class="other-label">LocalStorage Keys</span>
+        <span class="other-count">${storage.localStorage || 0}</span>
+      </div>
+      <div class="other-item">
+        <span class="other-icon">📦</span>
+        <span class="other-label">SessionStorage Keys</span>
+        <span class="other-count">${storage.sessionStorage || 0}</span>
       </div>
     `;
   }
@@ -451,16 +847,24 @@ class PopupController {
     const detailedJson = this.generateDetailedJson(this.scanData);
     navigator.clipboard.writeText(JSON.stringify(detailedJson, null, 2))
       .then(() => this.showToast('Copied JSON to clipboard!'))
-      .catch(() => this.showToast('Failed to copy'));
+      .catch((err) => this.showToast('Failed to copy: ' + err.message));
   }
 
   generateDetailedJson(data) {
+    const scores = this.calculateScores(data);
     return {
       scanInfo: {
         url: data.url,
         title: data.title,
         timestamp: data.timestamp,
-        scanVersion: '2.0.0'
+        scanVersion: '2.1.0'
+      },
+      scores: {
+        overall: Math.round((scores.seo.score + scores.accessibility.score + scores.performance.score + scores.bestPractices.score) / 4),
+        seo: { score: scores.seo.score, issues: scores.seo.issues },
+        accessibility: { score: scores.accessibility.score, issues: scores.accessibility.issues },
+        performance: { score: scores.performance.score, issues: scores.performance.issues },
+        bestPractices: { score: scores.bestPractices.score, issues: scores.bestPractices.issues }
       },
       summary: {
         totalForms: data.forms.length,
@@ -478,46 +882,11 @@ class PopupController {
         iframes: data.iframes?.total || data.iframes || 0
       },
       meta: data.meta || {},
-      forms: data.forms.map(form => ({
-        name: form.name,
-        action: form.action,
-        method: form.method,
-        inShadowDOM: form.inShadowDOM || false,
-        fieldsCount: form.fields.length,
-        fields: form.fields.map(field => ({
-          tag: field.tag,
-          type: field.type,
-          name: field.name,
-          id: field.id,
-          label: field.label,
-          placeholder: field.placeholder,
-          required: field.required,
-          disabled: field.disabled,
-          readonly: field.readonly,
-          pattern: field.pattern,
-          minLength: field.minLength,
-          maxLength: field.maxLength,
-          min: field.min,
-          max: field.max,
-          autocomplete: field.autocomplete,
-          ariaLabel: field.ariaLabel,
-          inShadowDOM: field.inShadowDOM || false,
-          options: field.options || null
-        }))
-      })),
+      forms: data.forms,
       buttons: data.buttons,
-      links: {
-        total: data.linksTotal || data.links.length,
-        items: data.links
-      },
+      links: { total: data.linksTotal || data.links.length, items: data.links },
       headings: data.headings,
-      media: data.media || {
-        images: { total: data.images, withAlt: 0, withoutAlt: 0, items: [] },
-        videos: { total: 0, items: [] },
-        audio: { total: 0, items: [] },
-        svg: { total: 0 },
-        canvas: 0
-      },
+      media: data.media,
       tables: data.tables,
       navigation: data.navigation || {},
       semantic: data.semantic || {},
@@ -525,6 +894,7 @@ class PopupController {
       stylesheets: data.stylesheets || {},
       accessibility: data.accessibility || {},
       performance: data.performance || {},
+      storage: data.storage || {},
       iframes: data.iframes
     };
   }
@@ -534,17 +904,36 @@ class PopupController {
     const text = this.formatAsMarkdown(this.scanData);
     navigator.clipboard.writeText(text)
       .then(() => this.showToast('Copied Markdown to clipboard!'))
-      .catch(() => this.showToast('Failed to copy'));
+      .catch((err) => this.showToast('Failed to copy: ' + err.message));
   }
 
   formatAsMarkdown(data) {
-    let md = '';
+    const scores = this.calculateScores(data);
+    const overall = Math.round((scores.seo.score + scores.accessibility.score + scores.performance.score + scores.bestPractices.score) / 4);
     
-    md += `# Page Analysis Report\n\n`;
+    let md = `# ScanVui Report\n\n`;
     md += `**URL:** ${data.url}\n`;
     md += `**Title:** ${data.title}\n`;
     md += `**Scanned:** ${new Date(data.timestamp).toLocaleString()}\n\n`;
     md += `---\n\n`;
+
+    md += `## Scores\n\n`;
+    md += `| Category | Score | Status |\n`;
+    md += `|----------|-------|--------|\n`;
+    md += `| **Overall** | ${overall}/100 | ${overall >= 80 ? '✅' : overall >= 50 ? '⚠️' : '❌'} |\n`;
+    md += `| SEO | ${scores.seo.score}/100 | ${scores.seo.score >= 80 ? '✅' : scores.seo.score >= 50 ? '⚠️' : '❌'} |\n`;
+    md += `| Accessibility | ${scores.accessibility.score}/100 | ${scores.accessibility.score >= 80 ? '✅' : scores.accessibility.score >= 50 ? '⚠️' : '❌'} |\n`;
+    md += `| Performance | ${scores.performance.score}/100 | ${scores.performance.score >= 80 ? '✅' : scores.performance.score >= 50 ? '⚠️' : '❌'} |\n`;
+    md += `| Best Practices | ${scores.bestPractices.score}/100 | ${scores.bestPractices.score >= 80 ? '✅' : scores.bestPractices.score >= 50 ? '⚠️' : '❌'} |\n\n`;
+
+    const allIssues = [...scores.seo.issues, ...scores.accessibility.issues, ...scores.performance.issues, ...scores.bestPractices.issues];
+    if (allIssues.length > 0) {
+      md += `### Issues Found\n\n`;
+      allIssues.forEach(issue => {
+        md += `- ⚠️ ${issue}\n`;
+      });
+      md += '\n';
+    }
 
     md += `## Summary\n\n`;
     md += `| Element | Count |\n`;
@@ -560,7 +949,7 @@ class PopupController {
     md += `| Scripts | ${data.scripts?.total || 0} |\n`;
     md += `| Stylesheets | ${data.stylesheets?.total || 0} |\n`;
     md += `| iFrames | ${data.iframes?.total || data.iframes || 0} |\n`;
-    md += `| Shadow DOM Elements | ${data.shadowDomCount || 0} |\n`;
+    md += `| Shadow DOM | ${data.shadowDomCount || 0} |\n`;
     md += `| Custom Elements | ${data.customElements || 0} |\n\n`;
 
     if (data.meta) {
@@ -569,28 +958,16 @@ class PopupController {
       md += `- **Description:** ${data.meta.description || '(none)'}\n`;
       md += `- **Charset:** ${data.meta.charset || '(none)'}\n`;
       md += `- **Viewport:** ${data.meta.viewport || '(none)'}\n`;
-      md += `- **Canonical:** ${data.meta.canonical || '(none)'}\n`;
       md += `- **Language:** ${data.meta.language || '(none)'}\n`;
+      md += `- **Canonical:** ${data.meta.canonical || '(none)'}\n`;
       md += `- **Favicon:** ${data.meta.favicon ? 'Yes' : 'No'}\n`;
-      
-      if (data.meta.openGraph && data.meta.openGraph.length > 0) {
-        md += `\n### Open Graph Tags\n\n`;
-        data.meta.openGraph.forEach(og => {
-          md += `- **${og.property}:** ${og.content}\n`;
-        });
-      }
-      
-      if (data.meta.twitterCards && data.meta.twitterCards.length > 0) {
-        md += `\n### Twitter Card Tags\n\n`;
-        data.meta.twitterCards.forEach(tc => {
-          md += `- **${tc.name}:** ${tc.content}\n`;
-        });
-      }
-      md += '\n';
+      md += `- **Open Graph Tags:** ${data.meta.openGraph?.length || 0}\n`;
+      md += `- **Twitter Cards:** ${data.meta.twitterCards?.length || 0}\n`;
+      md += `- **Structured Data:** ${data.meta.structuredData?.length || 0}\n\n`;
     }
 
     md += `## Headings Structure\n\n`;
-    if (data.headings && data.headings.length > 0) {
+    if (data.headings?.length > 0) {
       data.headings.forEach(h => {
         const indent = '  '.repeat(parseInt(h.level.replace('H', '')) - 1);
         md += `${indent}- **${h.level}:** ${h.text}\n`;
@@ -600,189 +977,49 @@ class PopupController {
     }
     md += '\n';
 
-    md += `## Forms Detail\n\n`;
+    md += `## Forms\n\n`;
     if (data.forms.length === 0) {
-      md += `No forms detected on this page.\n\n`;
+      md += `No forms detected.\n\n`;
     } else {
       data.forms.forEach((form, i) => {
-        md += `### Form ${i + 1}: ${form.name || '(unnamed)'}\n\n`;
+        md += `### ${form.name || `Form #${i + 1}`}\n\n`;
         md += `- **Action:** ${form.action || 'N/A'}\n`;
         md += `- **Method:** ${form.method || 'GET'}\n`;
-        md += `- **Fields Count:** ${form.fields.length}\n`;
-        if (form.inShadowDOM) md += `- **In Shadow DOM:** Yes\n`;
-        md += '\n';
+        md += `- **Fields:** ${form.fields.length}\n\n`;
         
         if (form.fields.length > 0) {
-          md += `| Label/Name | Type | ID | Required | Validation |\n`;
-          md += `|------------|------|----|---------|-----------|\n`;
+          md += `| Field | Type | Required |\n`;
+          md += `|-------|------|----------|\n`;
           form.fields.forEach(field => {
-            const name = field.label || field.name || field.id || field.placeholder || '(unnamed)';
-            const validation = [];
-            if (field.pattern) validation.push(`pattern`);
-            if (field.minLength) validation.push(`min:${field.minLength}`);
-            if (field.maxLength) validation.push(`max:${field.maxLength}`);
-            if (field.min) validation.push(`min:${field.min}`);
-            if (field.max) validation.push(`max:${field.max}`);
-            md += `| ${name} | ${field.type} | ${field.id || '-'} | ${field.required ? 'Yes' : 'No'} | ${validation.join(', ') || '-'} |\n`;
+            const name = field.label || field.name || field.id || '(unnamed)';
+            md += `| ${name} | ${field.type} | ${field.required ? 'Yes' : 'No'} |\n`;
           });
           md += '\n';
         }
       });
     }
 
-    md += `## Buttons\n\n`;
-    if (data.buttons.length > 0) {
-      md += `| Text | Type | Disabled |\n`;
-      md += `|------|------|----------|\n`;
-      data.buttons.slice(0, 30).forEach(btn => {
-        md += `| ${btn.text} | ${btn.type} | ${btn.disabled ? 'Yes' : 'No'} |\n`;
-      });
-      if (data.buttons.length > 30) {
-        md += `\n*...and ${data.buttons.length - 30} more buttons*\n`;
-      }
-    } else {
-      md += `No buttons found.\n`;
-    }
-    md += '\n';
-
-    md += `## Links\n\n`;
-    if (data.navigation) {
-      md += `- **Total Links:** ${data.linksTotal || data.links.length}\n`;
-      md += `- **Internal Links:** ${data.navigation.internalLinks || 0}\n`;
-      md += `- **External Links:** ${data.navigation.externalLinks || 0}\n`;
-      md += `- **Anchor Links:** ${data.navigation.anchorLinks || 0}\n`;
-      md += `- **Tel/Mail Links:** ${data.navigation.telMailLinks || 0}\n\n`;
-    }
-    if (data.links.length > 0) {
-      md += `### Sample Links (first 20)\n\n`;
-      data.links.slice(0, 20).forEach(link => {
-        md += `- [${link.text || '(no text)'}](${link.href})\n`;
-      });
-    }
-    md += '\n';
-
-    md += `## Media\n\n`;
-    if (data.media) {
-      md += `### Images\n`;
-      md += `- **Total:** ${data.media.images?.total || 0}\n`;
-      md += `- **With Alt Text:** ${data.media.images?.withAlt || 0}\n`;
-      md += `- **Without Alt Text:** ${data.media.images?.withoutAlt || 0}\n`;
-      if (data.media.images?.items && data.media.images.items.length > 0) {
-        md += `\n| Src | Alt | Dimensions |\n`;
-        md += `|-----|-----|------------|\n`;
-        data.media.images.items.slice(0, 10).forEach(img => {
-          const src = img.src?.substring(0, 50) + (img.src?.length > 50 ? '...' : '');
-          md += `| ${src || '-'} | ${img.alt || '-'} | ${img.width || '?'}x${img.height || '?'} |\n`;
-        });
-      }
-      
-      md += `\n### Videos\n`;
-      md += `- **Total:** ${data.media.videos?.total || 0}\n`;
-      
-      md += `\n### Audio\n`;
-      md += `- **Total:** ${data.media.audio?.total || 0}\n`;
-      
-      md += `\n### SVG\n`;
-      md += `- **Total:** ${data.media.svg?.total || 0}\n`;
-      
-      md += `\n### Canvas\n`;
-      md += `- **Total:** ${data.media.canvas || 0}\n`;
-    }
-    md += '\n';
-
-    if (data.tables && data.tables.items && data.tables.items.length > 0) {
-      md += `## Tables\n\n`;
-      md += `- **Total:** ${data.tables.total}\n\n`;
-      data.tables.items.forEach((table, i) => {
-        md += `### Table ${i + 1}\n`;
-        md += `- **Rows:** ${table.rows}\n`;
-        md += `- **Columns:** ${table.columns}\n`;
-        md += `- **Has Header:** ${table.hasHeader ? 'Yes' : 'No'}\n`;
-        if (table.caption) md += `- **Caption:** ${table.caption}\n`;
-        md += '\n';
-      });
-    }
-
-    md += `## Semantic Structure\n\n`;
-    if (data.semantic) {
-      md += `| Element | Count |\n`;
-      md += `|---------|-------|\n`;
-      md += `| \`<header>\` | ${data.semantic.header || 0} |\n`;
-      md += `| \`<nav>\` | ${data.semantic.nav || 0} |\n`;
-      md += `| \`<main>\` | ${data.semantic.main || 0} |\n`;
-      md += `| \`<article>\` | ${data.semantic.article || 0} |\n`;
-      md += `| \`<section>\` | ${data.semantic.section || 0} |\n`;
-      md += `| \`<aside>\` | ${data.semantic.aside || 0} |\n`;
-      md += `| \`<footer>\` | ${data.semantic.footer || 0} |\n`;
-      md += `| \`<figure>\` | ${data.semantic.figure || 0} |\n`;
-      md += `| \`<figcaption>\` | ${data.semantic.figcaption || 0} |\n`;
-      md += `| \`<details>\` | ${data.semantic.details || 0} |\n`;
-      md += `| \`<dialog>\` | ${data.semantic.dialog || 0} |\n`;
-    }
-    md += '\n';
-
     md += `## Accessibility\n\n`;
     if (data.accessibility) {
-      md += `| Feature | Count/Status |\n`;
-      md += `|---------|-------------|\n`;
-      md += `| ARIA Labels | ${data.accessibility.ariaLabels || 0} |\n`;
-      md += `| ARIA Roles | ${data.accessibility.ariaRoles || 0} |\n`;
-      md += `| Tabindex Elements | ${data.accessibility.tabindex || 0} |\n`;
-      md += `| Labels | ${data.accessibility.labels || 0} |\n`;
-      md += `| Skip Links | ${data.accessibility.skipLinks || 0} |\n`;
-      md += `| Lang Attribute | ${data.accessibility.langAttribute ? 'Yes' : 'No'} |\n`;
-      md += `| Alt Text Coverage | ${data.accessibility.altTextCoverage || 0}% |\n`;
+      md += `- **Alt Text Coverage:** ${data.accessibility.altTextCoverage || 0}%\n`;
+      md += `- **ARIA Labels:** ${data.accessibility.ariaLabels || 0}\n`;
+      md += `- **ARIA Roles:** ${data.accessibility.ariaRoles || 0}\n`;
+      md += `- **Form Labels:** ${data.accessibility.labels || 0}\n`;
+      md += `- **Skip Links:** ${data.accessibility.skipLinks || 0}\n`;
+      md += `- **Lang Attribute:** ${data.accessibility.langAttribute ? 'Yes' : 'No'}\n\n`;
     }
-    md += '\n';
 
-    md += `## Scripts & Styles\n\n`;
-    if (data.scripts) {
-      md += `### Scripts\n`;
-      md += `- **Total:** ${data.scripts.total || 0}\n`;
-      md += `- **External:** ${data.scripts.external || 0}\n`;
-      md += `- **Inline:** ${data.scripts.inline || 0}\n`;
-      md += `- **Modules:** ${data.scripts.modules || 0}\n`;
-      md += `- **Async:** ${data.scripts.async || 0}\n`;
-      md += `- **Defer:** ${data.scripts.defer || 0}\n`;
-      
-      if (data.scripts.sources && data.scripts.sources.length > 0) {
-        md += `\n**External Script Sources:**\n`;
-        data.scripts.sources.slice(0, 10).forEach(src => {
-          md += `- ${src}\n`;
-        });
-      }
-    }
-    if (data.stylesheets) {
-      md += `\n### Stylesheets\n`;
-      md += `- **Total:** ${data.stylesheets.total || 0}\n`;
-      md += `- **External:** ${data.stylesheets.external || 0}\n`;
-      md += `- **Inline:** ${data.stylesheets.inline || 0}\n`;
-    }
-    md += '\n';
-
+    md += `## Performance\n\n`;
     if (data.performance) {
-      md += `## Performance Hints\n\n`;
       md += `- **DOM Elements:** ${data.performance.domElements || 0}\n`;
       md += `- **DOM Depth:** ${data.performance.domDepth || 0}\n`;
-      md += `- **Images without dimensions:** ${data.performance.imagesWithoutDimensions || 0}\n`;
       md += `- **Inline Styles:** ${data.performance.inlineStyles || 0}\n`;
-      md += `- **Deprecated Elements:** ${data.performance.deprecatedElements || 0}\n`;
-      md += '\n';
-    }
-
-    if (data.iframes && data.iframes.items && data.iframes.items.length > 0) {
-      md += `## iFrames\n\n`;
-      md += `- **Total:** ${data.iframes.total}\n\n`;
-      data.iframes.items.forEach((iframe, i) => {
-        md += `${i + 1}. **${iframe.title || 'Untitled'}**\n`;
-        md += `   - Src: ${iframe.src || '(none)'}\n`;
-        if (iframe.sandbox) md += `   - Sandbox: Yes\n`;
-        md += '\n';
-      });
+      md += `- **Images without dimensions:** ${data.performance.imagesWithoutDimensions || 0}\n`;
+      md += `- **Deprecated Elements:** ${data.performance.deprecatedElements || 0}\n\n`;
     }
 
     md += `---\n\n`;
-    md += `*Generated by ScanVui v2.0*\n`;
+    md += `*Generated by ScanVui v2.1*\n`;
 
     return md;
   }
@@ -794,7 +1031,7 @@ class PopupController {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `scanvui-report-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `scanvui-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     this.showToast('Downloaded!');
@@ -809,7 +1046,7 @@ class PopupController {
     toast.textContent = message;
     document.body.appendChild(toast);
     
-    setTimeout(() => toast.remove(), 2000);
+    setTimeout(() => toast.remove(), 2500);
   }
 }
 
@@ -843,6 +1080,7 @@ function scanPageContent() {
     stylesheets: {},
     accessibility: {},
     performance: {},
+    storage: {},
     fonts: []
   };
 
@@ -882,6 +1120,17 @@ function scanPageContent() {
   result.customElements = customElements;
   result.performance.domElements = allElements.length;
   result.performance.domDepth = maxDepth;
+
+  // Storage information
+  try {
+    result.storage = {
+      cookies: document.cookie ? document.cookie.split(';').filter(c => c.trim()).length : 0,
+      localStorage: localStorage ? Object.keys(localStorage).length : 0,
+      sessionStorage: sessionStorage ? Object.keys(sessionStorage).length : 0
+    };
+  } catch (e) {
+    result.storage = { cookies: 0, localStorage: 0, sessionStorage: 0 };
+  }
 
   // Meta information
   result.meta = {
@@ -1061,7 +1310,7 @@ function scanPageContent() {
     });
   });
 
-  // Links with categorization
+  // Links
   const links = document.querySelectorAll('a[href]');
   const currentHost = window.location.hostname;
   let internalLinks = 0, externalLinks = 0, anchorLinks = 0, telMailLinks = 0;

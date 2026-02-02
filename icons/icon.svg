@@ -1,16 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#667eea"/>
-      <stop offset="100%" style="stop-color:#764ba2"/>
+      <stop offset="100%" style="stop-color:#f093fb"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="24" fill="url(#grad)"/>
-  <g fill="white">
-    <rect x="24" y="32" width="80" height="12" rx="4"/>
-    <rect x="24" y="52" width="60" height="12" rx="4"/>
-    <rect x="24" y="72" width="70" height="12" rx="4"/>
-    <circle cx="96" cy="88" r="16" fill="none" stroke="white" stroke-width="4"/>
-    <line x1="108" y1="100" x2="118" y2="110" stroke="white" stroke-width="4" stroke-linecap="round"/>
-  </g>
+  
+  <!-- Background -->
+  <rect x="0" y="0" width="128" height="128" rx="32" ry="32" fill="url(#bg)"/>
+  
+  <!-- Magnifying glass handle -->
+  <line x1="62" y1="62" x2="108" y2="108" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  
+  <!-- Magnifying glass lens -->
+  <circle cx="48" cy="48" r="36" fill="white"/>
+  
+  <!-- Smiley face -->
+  <!-- Left eye -->
+  <circle cx="36" cy="42" r="5" fill="#667eea"/>
+  <!-- Right eye -->
+  <circle cx="60" cy="42" r="5" fill="#667eea"/>
+  <!-- Smile -->
+  <path d="M 32 54 Q 48 72 64 54" stroke="#667eea" stroke-width="5" fill="none" stroke-linecap="round"/>
 </svg>
