@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ScanVui",
-  "version": "2.1.0",
-  "description": "Scan web pages to analyze forms, SEO, accessibility, and page structure. Get instant scores and detailed reports. Fun & Easy!",
+  "version": "3.1.0",
+  "description": "Công cụ kiểm tra SEO & Accessibility cho web developers. Quét trang, phân tích form, tìm media, và nhiều tính năng hữu ích khác!",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -20,7 +20,8 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"

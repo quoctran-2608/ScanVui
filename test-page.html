@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Form Inspector Test Page</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
     .section { margin-bottom: 40px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
     h2 { color: #667eea; }
     label { display: block; margin: 10px 0 5px; font-weight: bold; }
@@ -13,10 +13,22 @@
     button { background: #667eea; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
     button:hover { background: #5a6fd6; }
     .custom-input { border: 2px solid #764ba2; padding: 10px; min-height: 40px; }
+    header, nav, main, footer, article, aside { padding: 10px; margin: 10px 0; border: 1px dashed #ccc; }
+    nav a { margin-right: 15px; }
   </style>
 </head>
 <body>
-  <h1>Form Inspector Test Page</h1>
+  <header>
+    <h1>Form Inspector Test Page</h1>
+    <nav>
+      <a href="#section1">Login</a>
+      <a href="#section2">Contact</a>
+      <a href="#section3">ARIA</a>
+      <a href="#section4">Standalone</a>
+    </nav>
+  </header>
+
+  <main>
   <p>Use this page to test the Get-Form Inspector Chrome Extension.</p>
 
   <div class="section">
@@ -150,8 +162,23 @@
     </form>
   </div>
 
-  <div class="section">
-    <h2>7. Page Elements Summary</h2>
+  <article class="section">
+    <h2>7. Media Elements (for X-Ray testing)</h2>
+    <video width="320" height="180" controls poster="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='180'><rect fill='%23333' width='320' height='180'/><text x='160' y='95' fill='white' text-anchor='middle'>Video Placeholder</text></svg>">
+      <source src="video.mp4" type="video/mp4">
+      Your browser does not support video.
+    </video>
+
+    <audio controls style="width: 100%; margin-top: 10px;">
+      <source src="audio.mp3" type="audio/mpeg">
+      Your browser does not support audio.
+    </audio>
+
+    <iframe src="about:blank" width="320" height="180" style="border: 1px solid #ccc; margin-top: 10px;" title="Iframe example"></iframe>
+  </article>
+
+  <section class="section">
+    <h2>8. Page Elements Summary</h2>
     <h3>Sub-heading H3</h3>
     <h4>Sub-sub-heading H4</h4>
     
@@ -175,9 +202,20 @@
       <a href="https://google.com">Example Link 2</a> |
       <a href="#top">Back to Top</a>
     </p>
-    
+
     <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect fill='%23667eea' width='100' height='100'/></svg>" alt="Test Image" width="100" height="100">
-  </div>
+  </section>
+
+  </main>
+
+  <aside>
+    <h3>Sidebar (aside)</h3>
+    <p>This is an aside element for X-Ray semantic testing.</p>
+  </aside>
+
+  <footer>
+    <p>&copy; 2024 ScanVui Test Page | <a href="#">Privacy</a> | <a href="#">Terms</a></p>
+  </footer>
 
   <script>
     console.log('Test page loaded. Open the Get-Form Inspector extension to scan this page.');

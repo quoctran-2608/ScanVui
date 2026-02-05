@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,164 +7,309 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body data-theme="light">
-  <div class="container">
+  <div class="app">
+    <!-- Header -->
     <header class="header">
-      <div class="header-title">
-        <img src="../../icons/icon48.png" alt="ScanVui" class="header-logo">
-        <h1>ScanVui</h1>
+      <div class="header-left">
+        <img src="../../icons/icon48.png" alt="ScanVui" class="logo">
+        <span class="app-name">ScanVui</span>
       </div>
-      <div class="header-actions">
-        <button id="themeToggle" class="btn-icon-only" title="Toggle theme">🌙</button>
-        <span class="version">v2.1</span>
+      <div class="header-right">
+        <button id="themeToggle" class="icon-btn" title="Chuyển theme">
+          <span class="icon-light">☀️</span>
+          <span class="icon-dark">🌙</span>
+        </button>
+        <span class="version">v3.1</span>
       </div>
     </header>
-    
-    <div class="toolbar">
-      <button id="scanBtn" class="btn btn-primary">
-        <span class="btn-icon">🔍</span> Scan Page
+
+    <!-- Main Action -->
+    <div class="main-action">
+      <button id="scanBtn" class="scan-btn">
+        <span class="scan-icon">🔍</span>
+        <span class="scan-text">Quét trang</span>
       </button>
-      <button id="refreshBtn" class="btn btn-secondary" title="Refresh">
-        <span class="btn-icon">↻</span>
-      </button>
+      <div id="pageInfo" class="page-info"></div>
     </div>
 
-    <div class="search-bar">
-      <input type="text" id="searchInput" placeholder="🔎 Search results..." class="search-input">
-    </div>
-
-    <!-- Welcome Screen -->
-    <div id="welcomeScreen" class="welcome-screen">
-      <div class="welcome-icon">🔍😊</div>
-      <h2>Welcome to ScanVui!</h2>
-      <p>Click <strong>Scan Page</strong> to analyze the current webpage.</p>
-      <div class="welcome-features">
-        <div class="feature-item">📊 SEO & Accessibility Scores</div>
-        <div class="feature-item">📝 Forms & Fields Detection</div>
-        <div class="feature-item">🎯 Element Highlighting</div>
-        <div class="feature-item">📋 Export to JSON/Markdown</div>
-      </div>
-    </div>
-
+    <!-- Loading State -->
     <div id="loading" class="loading hidden">
       <div class="spinner"></div>
-      <span>Scanning page...</span>
+      <span>Đang phân tích...</span>
     </div>
 
+    <!-- Error State -->
     <div id="error" class="error hidden">
       <span class="error-icon">⚠️</span>
       <span id="errorMessage"></span>
     </div>
 
-    <div id="results" class="results hidden">
-      <!-- Score Section -->
-      <section class="section score-section">
-        <div id="scoreSection"></div>
-      </section>
+    <!-- Tab Navigation -->
+    <nav id="tabNav" class="tab-nav hidden">
+      <button class="tab-btn active" data-tab="results">
+        <span class="tab-icon">📊</span>
+        <span class="tab-label">Kết quả</span>
+      </button>
+      <button class="tab-btn" data-tab="tools">
+        <span class="tab-icon">🛠️</span>
+        <span class="tab-label">Công cụ</span>
+      </button>
+      <button class="tab-btn" data-tab="export">
+        <span class="tab-icon">📤</span>
+        <span class="tab-label">Xuất</span>
+      </button>
+    </nav>
 
-      <!-- Summary Section -->
-      <section class="section summary-section">
-        <h2>📊 Summary</h2>
-        <div class="summary-grid" id="summaryGrid"></div>
-      </section>
+    <!-- Tab Content -->
+    <div id="tabContent" class="tab-content hidden">
+      
+      <!-- Results Tab -->
+      <div id="resultsTab" class="tab-panel active">
+        <!-- Score Cards -->
+        <div id="scoreCards" class="score-cards"></div>
 
-      <!-- Meta Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="metaSection">
-          <span class="section-toggle">▶</span>
-          <h2>🏷️ Meta Information</h2>
+        <!-- Issues List -->
+        <div id="issuesList" class="issues-section">
+          <div class="section-title">
+            <span>⚠️ Vấn đề cần sửa</span>
+            <span id="issuesCount" class="badge">0</span>
+          </div>
+          <div id="issuesContent" class="issues-content"></div>
         </div>
-        <div class="section-content" id="metaSection"></div>
-      </section>
 
-      <!-- Forms Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="formsWrapper">
-          <span class="section-toggle">▶</span>
-          <h2>📝 Forms Detail</h2>
-        </div>
-        <div class="section-content" id="formsWrapper">
-          <div id="formsContainer" class="forms-container"></div>
-        </div>
-      </section>
+        <!-- Quick Stats -->
+        <div class="section-title standalone">📈 Thống kê nhanh</div>
+        <div id="quickStats" class="quick-stats"></div>
 
-      <!-- Headings Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="headingsSection">
-          <span class="section-toggle">▶</span>
-          <h2>📰 Headings Structure</h2>
+        <!-- Detailed Sections (Collapsible) -->
+        <div id="detailSections" class="detail-sections">
+          <details class="detail-group">
+            <summary>🏷️ Meta & SEO</summary>
+            <div id="metaDetail" class="detail-content"></div>
+          </details>
+          
+          <details class="detail-group">
+            <summary>📝 Forms & Inputs</summary>
+            <div id="formsDetail" class="detail-content"></div>
+          </details>
+          
+          <details class="detail-group">
+            <summary>♿ Accessibility</summary>
+            <div id="a11yDetail" class="detail-content"></div>
+          </details>
+          
+          <details class="detail-group">
+            <summary>🔧 Chi tiết kỹ thuật</summary>
+            <div id="techDetail" class="detail-content"></div>
+          </details>
         </div>
-        <div class="section-content" id="headingsSection"></div>
-      </section>
+      </div>
 
-      <!-- Media Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="mediaSection">
-          <span class="section-toggle">▶</span>
-          <h2>🎬 Media</h2>
-        </div>
-        <div class="section-content" id="mediaSection"></div>
-      </section>
+      <!-- Tools Tab -->
+      <div id="toolsTab" class="tab-panel">
+        <div class="tools-grid">
+          <!-- X-Ray Vision -->
+          <div class="tool-card" data-tool="xray">
+            <div class="tool-header">
+              <span class="tool-icon">👁️</span>
+              <span class="tool-name">X-Ray Vision</span>
+            </div>
+            <p class="tool-desc">Highlight elements trên trang theo loại</p>
+            <div class="tool-options xray-options">
+              <label><input type="checkbox" data-xray="forms" checked> Forms</label>
+              <label><input type="checkbox" data-xray="inputs" checked> Inputs</label>
+              <label><input type="checkbox" data-xray="buttons" checked> Buttons</label>
+              <label><input type="checkbox" data-xray="links"> Links</label>
+              <label><input type="checkbox" data-xray="headings"> Headings</label>
+              <label><input type="checkbox" data-xray="images"> Images</label>
+            </div>
+            <div class="tool-actions">
+              <button class="tool-btn primary" id="xrayApply" aria-label="Bật X-Ray Vision">Bật X-Ray</button>
+              <button class="tool-btn" id="xrayClear" aria-label="Tắt X-Ray Vision">Tắt</button>
+            </div>
+          </div>
 
-      <!-- Navigation Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="navigationSection">
-          <span class="section-toggle">▶</span>
-          <h2>🧭 Navigation & Links</h2>
-        </div>
-        <div class="section-content" id="navigationSection"></div>
-      </section>
+          <!-- Form Filler -->
+          <div class="tool-card" data-tool="formfiller">
+            <div class="tool-header">
+              <span class="tool-icon">🧪</span>
+              <span class="tool-name">Form Filler</span>
+            </div>
+            <p class="tool-desc">Tự động điền form với dữ liệu test</p>
+            <div class="tool-options">
+              <select id="fillLocale">
+                <option value="vi">Tiếng Việt</option>
+                <option value="en">English</option>
+              </select>
+              <select id="fillMode">
+                <option value="realistic">Thực tế</option>
+                <option value="random">Ngẫu nhiên</option>
+                <option value="edge">Edge cases</option>
+              </select>
+            </div>
+            <div class="tool-actions">
+              <button class="tool-btn primary" id="fillForms">Điền form</button>
+              <button class="tool-btn" id="clearForms">Xóa</button>
+            </div>
+          </div>
 
-      <!-- Semantic Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="semanticSection">
-          <span class="section-toggle">▶</span>
-          <h2>🏗️ Semantic Structure</h2>
-        </div>
-        <div class="section-content" id="semanticSection"></div>
-      </section>
+          <!-- Selector Picker -->
+          <div class="tool-card" data-tool="selector">
+            <div class="tool-header">
+              <span class="tool-icon">🎯</span>
+              <span class="tool-name">Copy Selector</span>
+            </div>
+            <p class="tool-desc">Lấy CSS/XPath/Playwright selector</p>
+            <div id="selectorResult" class="selector-result hidden">
+              <div class="selector-row">
+                <span class="selector-label">CSS:</span>
+                <code id="cssSelector">-</code>
+                <button class="copy-mini" data-copy="css" aria-label="Copy CSS selector">📋</button>
+              </div>
+              <div class="selector-row">
+                <span class="selector-label">XPath:</span>
+                <code id="xpathSelector">-</code>
+                <button class="copy-mini" data-copy="xpath" aria-label="Copy XPath">📋</button>
+              </div>
+              <div class="selector-row">
+                <span class="selector-label">Playwright:</span>
+                <code id="playwrightSelector">-</code>
+                <button class="copy-mini" data-copy="playwright" aria-label="Copy Playwright selector">📋</button>
+              </div>
+            </div>
+            <div class="tool-actions">
+              <button class="tool-btn primary" id="pickElement" aria-label="Chọn element từ trang">Chọn element</button>
+            </div>
+          </div>
 
-      <!-- Scripts Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="scriptsSection">
-          <span class="section-toggle">▶</span>
-          <h2>📜 Scripts & Styles</h2>
-        </div>
-        <div class="section-content" id="scriptsSection"></div>
-      </section>
+          <!-- Responsive Test -->
+          <div class="tool-card" data-tool="responsive">
+            <div class="tool-header">
+              <span class="tool-icon">📱</span>
+              <span class="tool-name">Responsive</span>
+            </div>
+            <p class="tool-desc">Test với các kích thước màn hình</p>
+            <div class="viewport-buttons">
+              <button class="viewport-btn" data-w="375" data-h="667">iPhone SE</button>
+              <button class="viewport-btn" data-w="390" data-h="844">iPhone 14</button>
+              <button class="viewport-btn" data-w="768" data-h="1024">iPad</button>
+              <button class="viewport-btn" data-w="1920" data-h="1080">Desktop</button>
+            </div>
+          </div>
 
-      <!-- Accessibility Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="accessibilitySection">
-          <span class="section-toggle">▶</span>
-          <h2>♿ Accessibility</h2>
-        </div>
-        <div class="section-content" id="accessibilitySection"></div>
-      </section>
+          <!-- A11y Simulator -->
+          <div class="tool-card" data-tool="a11y">
+            <div class="tool-header">
+              <span class="tool-icon">♿</span>
+              <span class="tool-name">A11y Simulator</span>
+            </div>
+            <p class="tool-desc">Mô phỏng các dạng khiếm thị</p>
+            <div class="sim-buttons">
+              <button class="sim-btn" data-sim="protanopia">🔴 Mù đỏ</button>
+              <button class="sim-btn" data-sim="deuteranopia">🟢 Mù xanh lá</button>
+              <button class="sim-btn" data-sim="tritanopia">🔵 Mù xanh</button>
+              <button class="sim-btn" data-sim="achromatopsia">⚫ Mù màu</button>
+              <button class="sim-btn" data-sim="blurry">👓 Mờ</button>
+            </div>
+            <div class="tool-actions">
+              <button class="tool-btn" id="resetA11y">Khôi phục</button>
+            </div>
+          </div>
 
-      <!-- Storage Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="storageSection">
-          <span class="section-toggle">▶</span>
-          <h2>💾 Storage</h2>
-        </div>
-        <div class="section-content" id="storageSection"></div>
-      </section>
+          <!-- Tech Stack -->
+          <div class="tool-card" data-tool="techstack">
+            <div class="tool-header">
+              <span class="tool-icon">⚙️</span>
+              <span class="tool-name">Tech Stack</span>
+            </div>
+            <p class="tool-desc">Phát hiện frameworks & thư viện</p>
+            <div id="techStackResult" class="techstack-result"></div>
+            <div class="tool-actions">
+              <button class="tool-btn primary" id="detectTech">Phát hiện</button>
+            </div>
+          </div>
 
-      <!-- Other Elements Section -->
-      <section class="section collapsible">
-        <div class="section-header" data-target="otherElements">
-          <span class="section-toggle">▶</span>
-          <h2>🔧 Technical Details</h2>
+          <!-- Media Scanner -->
+          <div class="tool-card" data-tool="media">
+            <div class="tool-header">
+              <span class="tool-icon">🖼️</span>
+              <span class="tool-name">Media Scanner</span>
+            </div>
+            <p class="tool-desc">Tìm và tải hình ảnh, video</p>
+            <div id="mediaSummary" class="media-summary"></div>
+            <div id="mediaList" class="media-list"></div>
+            <div class="tool-actions">
+              <button class="tool-btn primary" id="scanMedia">Quét media</button>
+              <button class="tool-btn" id="downloadAllMedia" disabled>Tải tất cả</button>
+            </div>
+          </div>
         </div>
-        <div class="section-content" id="otherElements"></div>
-      </section>
+      </div>
+
+      <!-- Export Tab -->
+      <div id="exportTab" class="tab-panel">
+        <div class="export-section">
+          <h3>📥 Tải báo cáo</h3>
+          <div class="export-grid">
+            <button class="export-btn" data-format="html">
+              <span class="export-icon">🌐</span>
+              <span class="export-name">HTML</span>
+              <span class="export-desc">Báo cáo đẹp</span>
+            </button>
+            <button class="export-btn" data-format="markdown">
+              <span class="export-icon">📝</span>
+              <span class="export-name">Markdown</span>
+              <span class="export-desc">Cho GitHub</span>
+            </button>
+            <button class="export-btn" data-format="json">
+              <span class="export-icon">📦</span>
+              <span class="export-name">JSON</span>
+              <span class="export-desc">Dữ liệu thô</span>
+            </button>
+            <button class="export-btn" data-format="csv">
+              <span class="export-icon">📊</span>
+              <span class="export-name">CSV</span>
+              <span class="export-desc">Cho Excel</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="export-section">
+          <h3>📋 Sao chép nhanh</h3>
+          <div class="quick-copy">
+            <button class="copy-btn" id="copyJSON">📋 Copy JSON</button>
+            <button class="copy-btn" id="copyMarkdown">📄 Copy Markdown</button>
+            <button class="copy-btn" id="copySummary">📊 Copy tóm tắt</button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <footer class="footer hidden" id="footer">
-      <button id="copyJsonBtn" class="btn btn-small">📋 JSON</button>
-      <button id="copyTextBtn" class="btn btn-small">📄 Markdown</button>
-      <button id="downloadBtn" class="btn btn-small">💾 Download</button>
-    </footer>
+    <!-- Welcome Screen (shown when no scan) -->
+    <div id="welcomeScreen" class="welcome">
+      <div class="welcome-content">
+        <div class="welcome-icon">🔍</div>
+        <h2>Chào mừng đến ScanVui!</h2>
+        <p>Công cụ kiểm tra SEO & Accessibility</p>
+        <div class="welcome-steps">
+          <div class="step">
+            <span class="step-num">1</span>
+            <span>Mở trang web cần kiểm tra</span>
+          </div>
+          <div class="step">
+            <span class="step-num">2</span>
+            <span>Nhấn <strong>Quét trang</strong></span>
+          </div>
+          <div class="step">
+            <span class="step-num">3</span>
+            <span>Xem kết quả và sửa lỗi</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden"></div>
   </div>
 
   <script src="popup.js"></script>

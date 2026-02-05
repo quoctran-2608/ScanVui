@@ -1,122 +1,271 @@
 # ScanVui - Chrome Extension
 
-A fun and easy Chrome Extension that scans web pages to detect all form fields, inputs, and interactive elements including Shadow DOM and dynamic content.
+![Phiên bản](https://img.shields.io/badge/phiên_bản-3.1.0-blue)
+![Chrome](https://img.shields.io/badge/chrome-extension-green)
+![Giấy phép](https://img.shields.io/badge/giấy_phép-MIT-orange)
 
-## Features
+**ScanVui** là một Chrome Extension mạnh mẽ giúp phân tích SEO, Accessibility, Performance và cung cấp các công cụ hữu ích cho lập trình viên và tester.
 
-- Detect all forms and input fields on any web page
-- Support for Shadow DOM elements (Web Components)
-- Detect ARIA-labeled elements (role="textbox", role="combobox", etc.)
-- Detect contenteditable elements
-- Analyze custom elements and dynamic content
-- Export results as JSON, Text, or download as file
-- Beautiful and intuitive popup UI
+## Tác giả
 
-## Installation
+- **Tên:** TranQuoc
+- **Email:** tduyquoc@gmail.com
 
-### Method 1: Load Unpacked Extension (Developer Mode)
+## Hướng dẫn cài đặt
 
-1. Open Chrome browser
-2. Go to `chrome://extensions/`
-3. Enable **Developer mode** (toggle in top-right corner)
-4. Click **Load unpacked**
-5. Select the `Get-Form-Extension` folder
-6. The extension icon should appear in your toolbar
+1. Clone hoặc tải repository này về máy
+2. Mở trình duyệt Chrome và truy cập `chrome://extensions/`
+3. Bật **Chế độ nhà phát triển** (Developer mode) ở góc trên bên phải
+4. Nhấn **Tải tiện ích đã giải nén** (Load unpacked) và chọn thư mục `ScanVui`
+5. Extension sẽ xuất hiện trên thanh công cụ của Chrome
 
-### Method 2: Pin the Extension
+## Tính năng chi tiết
 
-After installing, you might need to pin the extension:
-1. Click the puzzle icon in Chrome toolbar
-2. Find "Get-Form Inspector"
-3. Click the pin icon to keep it visible
+### 1. Quét và Phân tích trang (Page Scanner)
 
-## Usage
+Quét toàn diện trang web và đánh giá theo 4 tiêu chí chính:
 
-1. Navigate to any web page you want to analyze
-2. Click the ScanVui extension icon
-3. Click **Scan Page** button
-4. View the results:
-   - **Summary**: Overview of forms, fields, buttons, links, etc.
-   - **Forms Detail**: Click to expand each form and see all fields
-   - **Other Elements**: Headings, iframes, Shadow DOM count
+| Tiêu chí | Mô tả chi tiết |
+|----------|----------------|
+| **SEO** | Kiểm tra title, meta description, cấu trúc headings, canonical URL, Open Graph tags, alt text cho hình ảnh |
+| **Accessibility** | Kiểm tra ARIA labels, form labels, skip links, thuộc tính lang, semantic HTML |
+| **Performance** | Đánh giá kích thước DOM, độ sâu DOM, inline styles, số lượng scripts |
+| **Best Practices** | Kiểm tra charset, favicon, các elements lỗi thời |
 
-### Export Options
+**Kết quả hiển thị bao gồm:**
+- Thẻ điểm (Score cards) với điểm số từ 0-100 và màu sắc trực quan (xanh/vàng/đỏ)
+- Danh sách các vấn đề cần khắc phục
+- Thống kê nhanh về số lượng forms, links, images, scripts
+- Chi tiết kỹ thuật có thể mở rộng/thu gọn
 
-- **Copy JSON**: Copy full analysis as JSON to clipboard
-- **Copy Text**: Copy human-readable summary to clipboard
-- **Download**: Download analysis as JSON file
+### 2. X-Ray Vision (Chế độ nhìn xuyên)
 
-## What It Detects
+Làm nổi bật các phần tử trên trang theo từng loại với màu sắc riêng biệt:
 
-### Form Elements
-- All `<form>` elements
-- Standalone inputs (not inside a form)
-- Input types: text, email, password, number, tel, url, date, file, checkbox, radio, etc.
-- Select dropdowns
-- Textareas
-- Hidden fields (counted but not displayed)
+| Loại phần tử | Màu viền |
+|--------------|----------|
+| **Forms** | Xanh lá (#22c55e) |
+| **Inputs** | Xanh dương (#3b82f6) |
+| **Buttons** | Vàng (#eab308) |
+| **Links** | Tím (#a855f7) |
+| **Headings** | Đỏ (#ef4444) |
+| **Images** | Cam (#f97316) |
 
-### Custom Elements
-- `contenteditable` elements
-- ARIA roles: textbox, combobox, listbox, searchbox
-- Web Components with Shadow DOM
-- Custom HTML elements (tags with hyphens)
+### 3. Form Filler (Tự động điền form)
 
-### Field Properties
-- Name, ID, Label
-- Type and validation (required, pattern, min/max)
-- Placeholder text
-- ARIA labels and descriptions
-- Disabled/readonly state
+Tự động điền form với dữ liệu test theo các tùy chọn:
 
-### Page Structure
-- Headings (H1-H6)
-- Links count
-- Images count
-- Tables count
-- iFrames count
-- Shadow DOM elements count
+| Tùy chọn | Các lựa chọn |
+|----------|--------------|
+| **Ngôn ngữ** | Tiếng Việt / English |
+| **Chế độ điền** | Thực tế / Ngẫu nhiên / Edge cases |
 
-## Testing
+**Hỗ trợ các loại input:**
+- Text, Email, Phone, Name, Address
+- Checkbox, Radio button
+- Select dropdown, Textarea
+- Date, Number
 
-Open `test-page.html` in your browser to test the extension with various form types and input elements.
+### 4. Element Picker (Chọn và sao chép Selector)
 
-## Permissions
+Cho phép click vào bất kỳ phần tử nào trên trang để lấy selector:
 
-- `activeTab`: Access the current tab when you click the extension
-- `scripting`: Inject content scripts to analyze the page
-- `<all_urls>`: Work on any website
+| Loại Selector | Ví dụ |
+|---------------|-------|
+| **CSS Selector** | `#header`, `.btn-primary`, `div.container` |
+| **XPath** | `//*[@id="header"]`, `//div[1]/span[2]` |
+| **Playwright Selector** | `getByLabel("Email")`, `getByText("Đăng nhập")`, `[data-testid="submit"]` |
 
-## Files Structure
+**Các tính năng:**
+- Tooltip theo chuột hiển thị thông tin phần tử
+- Tự động sao chép CSS selector vào clipboard khi click
+- Nhấn phím ESC để hủy chế độ chọn
+- Nút sao chép riêng cho từng loại selector
+
+### 5. Responsive Tester (Kiểm tra giao diện đa thiết bị)
+
+Mở trang trong cửa sổ mới với kích thước màn hình cố định:
+
+| Thiết bị | Kích thước (width x height) |
+|----------|----------------------------|
+| iPhone SE | 375 x 667 pixels |
+| iPhone 14 | 390 x 844 pixels |
+| iPad | 768 x 1024 pixels |
+| Desktop | 1920 x 1080 pixels |
+
+### 6. A11y Simulator (Mô phỏng khiếm thị)
+
+Mô phỏng các dạng khiếm thị để kiểm tra khả năng tiếp cận:
+
+| Loại khiếm thị | Mô tả | Hiệu ứng CSS |
+|----------------|-------|--------------|
+| **Protanopia** | Mù màu đỏ | sepia + hue-rotate(-50deg) |
+| **Deuteranopia** | Mù màu xanh lá | sepia + hue-rotate(50deg) |
+| **Tritanopia** | Mù màu xanh dương | sepia + hue-rotate(180deg) |
+| **Achromatopsia** | Mù màu hoàn toàn | grayscale(100%) |
+| **Blurry** | Thị lực kém/mờ | blur(2px) |
+
+### 7. Tech Stack Detector (Phát hiện công nghệ)
+
+Tự động phát hiện các frameworks, thư viện và công nghệ được sử dụng trên trang:
+
+**JavaScript Frameworks:**
+- React, Vue.js, Angular, Svelte
+- Next.js, Nuxt.js, Gatsby, Astro
+
+**JavaScript Libraries:**
+- jQuery, htmx, Alpine.js
+
+**CSS Frameworks:**
+- Tailwind CSS, Bootstrap, Semantic UI
+- MUI (Material UI), Chakra UI, Ant Design
+
+**Build Tools:**
+- Vite
+
+**Analytics & Tracking:**
+- Google Analytics, Facebook Pixel, Segment
+- Mixpanel, Amplitude, PostHog
+
+**CMS & Website Builders:**
+- WordPress, Shopify, Webflow, Wix, Squarespace
+
+### 8. Media Scanner (Quét và tải media)
+
+Quét toàn bộ media trên trang với đầy đủ thông tin:
+
+**Các loại media được hỗ trợ:**
+- Hình ảnh (JPG, PNG, GIF, WebP, SVG, AVIF)
+- Hình nền CSS (Background images)
+- Video (HTML5 video, YouTube embed, Vimeo embed)
+- Audio (HTML5 audio)
+
+**Tính năng chi tiết:**
+| Tính năng | Mô tả |
+|-----------|-------|
+| Hiển thị thumbnail | Xem trước hình ảnh thu nhỏ |
+| Thông tin file | Tên file, kích thước (width x height), loại file |
+| Phân loại theo tabs | Ảnh / Video / Audio |
+| Sao chép URL | Nút 📋 để sao chép URL từng media |
+| Tải từng file | Nút ⬇️ để tải về từng file riêng lẻ |
+| Mở embed | Nút 🔗 để mở YouTube/Vimeo trong tab mới |
+| Tải tất cả | Tải hàng loạt (tối đa 30 files) vào thư mục `scanvui-media/` |
+
+### 9. Export & Copy (Xuất và sao chép báo cáo)
+
+Xuất báo cáo phân tích dưới nhiều định dạng khác nhau:
+
+| Định dạng | Mô tả | Ứng dụng |
+|-----------|-------|----------|
+| **HTML** | Báo cáo đẹp với định dạng đầy đủ | Xem trên trình duyệt, chia sẻ |
+| **Markdown** | Định dạng văn bản thuần | GitHub, tài liệu kỹ thuật |
+| **JSON** | Dữ liệu thô có cấu trúc | Xử lý bằng code, API |
+| **CSV** | Bảng dữ liệu | Excel, Google Sheets |
+
+**Sao chép nhanh:**
+- Sao chép JSON - Dữ liệu đầy đủ
+- Sao chép Markdown - Báo cáo định dạng
+- Sao chép tóm tắt - Thông tin ngắn gọn
+
+### 10. Giao diện (Theme)
+
+Hỗ trợ 2 chế độ giao diện:
+
+| Chế độ | Mô tả |
+|--------|-------|
+| **Light** | Giao diện sáng, nền trắng |
+| **Dark** | Giao diện tối, dễ nhìn ban đêm |
+
+- Chế độ giao diện được lưu tự động
+- Tự động áp dụng khi mở extension lần sau
+
+## Cấu trúc thư mục dự án
 
 ```
-Get-Form-Extension/
-├── manifest.json           # Extension configuration
+ScanVui/
+├── manifest.json              # Cấu hình Chrome extension (Manifest V3)
+├── README.md                  # Tài liệu hướng dẫn (file này)
+├── icons/                     # Biểu tượng extension
+│   ├── icon16.png            # Icon 16x16 pixels
+│   ├── icon48.png            # Icon 48x48 pixels
+│   └── icon128.png           # Icon 128x128 pixels
 ├── src/
 │   ├── popup/
-│   │   ├── popup.html      # Popup UI
-│   │   ├── popup.css       # Styles
-│   │   └── popup.js        # Logic & form detection
-│   ├── content/
-│   │   └── content-script.js  # Advanced DOM walker
-│   └── background/
-│       └── service-worker.js  # Background service
-├── icons/
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-├── docs/
-│   └── PROJECT_PLAN.md
-├── test-page.html          # Test page with various forms
-└── README.md
+│   │   ├── popup.html        # Giao diện popup chính
+│   │   ├── popup.css         # Định dạng CSS
+│   │   └── popup.js          # Logic xử lý JavaScript
+│   └── service-worker.js     # Background service worker
+├── generate_icons.py          # Script tạo icons
+└── test-page.html            # Trang test để phát triển
 ```
 
-## Browser Support
+## Quyền truy cập (Permissions)
 
-- Chrome 88+ (Manifest V3)
-- Edge 88+ (Chromium-based)
-- Other Chromium-based browsers
+Extension yêu cầu các quyền sau:
 
-## License
+| Quyền | Lý do cần thiết |
+|-------|-----------------|
+| `activeTab` | Truy cập tab đang mở để quét và phân tích |
+| `scripting` | Chèn scripts để thu thập thông tin trang |
+| `storage` | Lưu trữ kết quả quét và cài đặt người dùng |
+| `downloads` | Tải xuống các file media |
 
-MIT License
+## Yêu cầu hệ thống
+
+- **Trình duyệt:** Google Chrome phiên bản 88 trở lên (hỗ trợ Manifest V3)
+- **Lưu ý:** Extension không hoạt động trên các trang hệ thống như `chrome://` hoặc `chrome-extension://`
+
+## Hướng dẫn phát triển
+
+### Tạo icons
+
+```bash
+python generate_icons.py
+```
+
+### Kiểm thử
+
+1. Mở file `test-page.html` trong trình duyệt
+2. Click vào biểu tượng ScanVui trên thanh công cụ
+3. Thử nghiệm các tính năng
+
+### Reload extension sau khi sửa code
+
+1. Vào `chrome://extensions/`
+2. Nhấn nút reload (🔄) trên thẻ ScanVui
+3. Đóng và mở lại popup để thấy thay đổi
+
+## Lịch sử phiên bản (Changelog)
+
+### Phiên bản 3.1.0 (Hiện tại)
+- ✨ Thiết kế lại giao diện hoàn toàn với điều hướng theo tabs
+- ✨ Thêm thẻ điểm (score cards) với thanh tiến trình trực quan
+- ✨ Cải tiến Element Picker với tooltip và hỗ trợ đa selector
+- ✨ Cải tiến A11y Simulator sử dụng CSS filters thay vì SVG
+- ✨ Cải tiến Tech Stack detection (thêm hơn 15 frameworks mới)
+- ✨ Cải tiến Media Scanner với danh sách chi tiết và tải từng file
+- ✨ Thêm chế độ giao diện sáng/tối (dark/light theme)
+- ✨ Xuất báo cáo đa định dạng (HTML, Markdown, JSON, CSV)
+
+### Phiên bản 3.0.0
+- 🚀 Phiên bản đầu tiên
+
+## Giấy phép (License)
+
+MIT License - Tự do sử dụng, chỉnh sửa và phân phối.
+
+## Đóng góp
+
+Mọi đóng góp đều được chào đón! Vui lòng:
+- Tạo **Issue** để báo lỗi hoặc đề xuất tính năng mới
+- Tạo **Pull Request** để đóng góp code
+
+## Liên hệ
+
+- **Tác giả:** TranQuoc
+- **Email:** tduyquoc@gmail.com
+- **GitHub:** https://github.com/quoctran-2608/ScanVui
+
+---
+
+**ScanVui** - Quét vui vẻ, code hiệu quả! 🚀

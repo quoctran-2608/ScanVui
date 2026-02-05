@@ -1,118 +1,200 @@
-class PopupController {
+/**
+ * ScanVui v3.1 - Redesigned Popup Controller
+ * Clean, modular, user-friendly
+ */
+
+class ScanVuiApp {
   constructor() {
     this.scanData = null;
-    this.filteredData = null;
-    this.sectionsInitialized = false;
+    this.currentTab = 'results';
+    this.mediaData = null;
+    this.currentMediaTab = 'images';
     this.init();
   }
 
   init() {
     this.bindElements();
     this.bindEvents();
-    this.loadLastScan();
     this.initTheme();
+    this.loadLastScan();
+    this.showPageInfo();
   }
 
   bindElements() {
+    // Core
     this.scanBtn = document.getElementById('scanBtn');
-    this.refreshBtn = document.getElementById('refreshBtn');
     this.loading = document.getElementById('loading');
     this.error = document.getElementById('error');
     this.errorMessage = document.getElementById('errorMessage');
-    this.results = document.getElementById('results');
-    this.summaryGrid = document.getElementById('summaryGrid');
-    this.formsContainer = document.getElementById('formsContainer');
-    this.otherElements = document.getElementById('otherElements');
-    this.footer = document.getElementById('footer');
-    this.copyJsonBtn = document.getElementById('copyJsonBtn');
-    this.copyTextBtn = document.getElementById('copyTextBtn');
-    this.downloadBtn = document.getElementById('downloadBtn');
     this.welcomeScreen = document.getElementById('welcomeScreen');
-    this.searchInput = document.getElementById('searchInput');
+    this.tabNav = document.getElementById('tabNav');
+    this.tabContent = document.getElementById('tabContent');
+    this.pageInfo = document.getElementById('pageInfo');
     this.themeToggle = document.getElementById('themeToggle');
-    this.scoreSection = document.getElementById('scoreSection');
+    this.toast = document.getElementById('toast');
+
+    // Results Tab
+    this.scoreCards = document.getElementById('scoreCards');
+    this.issuesContent = document.getElementById('issuesContent');
+    this.issuesCount = document.getElementById('issuesCount');
+    this.quickStats = document.getElementById('quickStats');
+    this.metaDetail = document.getElementById('metaDetail');
+    this.formsDetail = document.getElementById('formsDetail');
+    this.a11yDetail = document.getElementById('a11yDetail');
+    this.techDetail = document.getElementById('techDetail');
+
+    // Tools
+    this.xrayApply = document.getElementById('xrayApply');
+    this.xrayClear = document.getElementById('xrayClear');
+    this.fillForms = document.getElementById('fillForms');
+    this.clearForms = document.getElementById('clearForms');
+    this.pickElement = document.getElementById('pickElement');
+    this.detectTech = document.getElementById('detectTech');
+    this.scanMedia = document.getElementById('scanMedia');
+    this.resetA11y = document.getElementById('resetA11y');
+
+    // Export
+    this.copyJSON = document.getElementById('copyJSON');
+    this.copyMarkdown = document.getElementById('copyMarkdown');
+    this.copySummary = document.getElementById('copySummary');
   }
 
   bindEvents() {
+    // Scan
     this.scanBtn.addEventListener('click', () => this.scanPage());
-    this.refreshBtn.addEventListener('click', () => this.scanPage());
-    this.copyJsonBtn.addEventListener('click', () => this.copyAsJson());
-    this.copyTextBtn.addEventListener('click', () => this.copyAsText());
-    this.downloadBtn.addEventListener('click', () => this.downloadJson());
+
+    // Theme
+    this.themeToggle.addEventListener('click', () => this.toggleTheme());
+
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+    });
+
+    // Tools
+    this.xrayApply?.addEventListener('click', () => this.applyXray());
+    this.xrayClear?.addEventListener('click', () => this.clearXray());
+    this.fillForms?.addEventListener('click', () => this.fillAllForms());
+    this.clearForms?.addEventListener('click', () => this.clearAllForms());
+    this.pickElement?.addEventListener('click', () => this.startElementPicker());
+    this.detectTech?.addEventListener('click', () => this.detectTechStack());
+    this.scanMedia?.addEventListener('click', () => this.scanAllMedia());
+    this.resetA11y?.addEventListener('click', () => this.resetA11ySimulation());
     
-    if (this.searchInput) {
-      this.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
-    }
+    // Download all media
+    document.getElementById('downloadAllMedia')?.addEventListener('click', () => this.downloadAllMedia());
     
-    if (this.themeToggle) {
-      this.themeToggle.addEventListener('click', () => this.toggleTheme());
-    }
+    // Copy mini buttons in selector result - use event delegation
+    document.getElementById('selectorResult')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.copy-mini');
+      if (btn) {
+        const type = btn.dataset.copy;
+        const codeEl = btn.previousElementSibling;
+        if (codeEl) {
+          navigator.clipboard.writeText(codeEl.textContent);
+          this.showToast(`Đã copy ${type}!`);
+        }
+      }
+    });
+
+    // Viewport buttons
+    document.querySelectorAll('.viewport-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.openViewport(parseInt(btn.dataset.w), parseInt(btn.dataset.h));
+      });
+    });
+
+    // A11y simulation buttons
+    document.querySelectorAll('.sim-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.applyA11ySimulation(btn.dataset.sim));
+    });
+
+    // Export buttons
+    document.querySelectorAll('.export-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.exportReport(btn.dataset.format));
+    });
+
+    this.copyJSON?.addEventListener('click', () => this.copyAsJSON());
+    this.copyMarkdown?.addEventListener('click', () => this.copyAsMarkdown());
+    this.copySummary?.addEventListener('click', () => this.copyAsSummary());
   }
 
-  escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-  }
-
+  // ============================================
+  // THEME
+  // ============================================
   initTheme() {
-    const savedTheme = localStorage.getItem('scanvui-theme') || 'light';
-    document.body.setAttribute('data-theme', savedTheme);
-    this.updateThemeIcon(savedTheme);
+    const saved = localStorage.getItem('scanvui-theme') || 'light';
+    document.body.setAttribute('data-theme', saved);
   }
 
   toggleTheme() {
-    const currentTheme = document.body.getAttribute('data-theme') || 'light';
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    document.body.setAttribute('data-theme', newTheme);
-    localStorage.setItem('scanvui-theme', newTheme);
-    this.updateThemeIcon(newTheme);
+    const current = document.body.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    document.body.setAttribute('data-theme', next);
+    localStorage.setItem('scanvui-theme', next);
   }
 
-  updateThemeIcon(theme) {
-    if (this.themeToggle) {
-      this.themeToggle.innerHTML = theme === 'light' ? '🌙' : '☀️';
-      this.themeToggle.title = theme === 'light' ? 'Dark mode' : 'Light mode';
-    }
+  // ============================================
+  // PAGE INFO
+  // ============================================
+  async showPageInfo() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.url) {
+        const url = new URL(tab.url);
+        this.pageInfo.textContent = url.hostname + url.pathname.substring(0, 30);
+      }
+    } catch (e) {}
   }
 
+  // ============================================
+  // TAB NAVIGATION
+  // ============================================
+  switchTab(tabId) {
+    this.currentTab = tabId;
+    
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+    
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === tabId + 'Tab');
+    });
+  }
+
+  // ============================================
+  // SCANNING
+  // ============================================
   async loadLastScan() {
     try {
       const result = await chrome.storage.local.get(['lastScan', 'lastScanUrl']);
       if (result.lastScan) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab && tab.url === result.lastScanUrl) {
+        if (tab?.url === result.lastScanUrl) {
           this.showResults(result.lastScan, false);
           return;
         }
       }
-    } catch (e) {
-      console.log('No previous scan data');
-    }
+    } catch (e) {}
     this.showWelcome();
   }
 
   showWelcome() {
-    if (this.welcomeScreen) {
-      this.welcomeScreen.classList.remove('hidden');
-    }
-    this.results.classList.add('hidden');
-    this.footer.classList.add('hidden');
+    this.welcomeScreen.classList.remove('hidden');
+    this.tabNav.classList.add('hidden');
+    this.tabContent.classList.add('hidden');
   }
 
   hideWelcome() {
-    if (this.welcomeScreen) {
-      this.welcomeScreen.classList.add('hidden');
-    }
+    this.welcomeScreen.classList.add('hidden');
   }
 
   showLoading() {
     this.hideWelcome();
     this.loading.classList.remove('hidden');
     this.error.classList.add('hidden');
-    this.results.classList.add('hidden');
-    this.footer.classList.add('hidden');
+    this.tabNav.classList.add('hidden');
+    this.tabContent.classList.add('hidden');
     this.scanBtn.disabled = true;
   }
 
@@ -127,326 +209,15 @@ class PopupController {
     this.error.classList.remove('hidden');
   }
 
-  showResults(data, saveToStorage = true) {
-    this.hideLoading();
-    this.hideWelcome();
-    this.scanData = data;
-    this.filteredData = data;
-    
-    if (saveToStorage) {
-      this.saveScanData(data);
-    }
-    
-    this.renderScoreSection(data);
-    this.renderSummary(data);
-    this.renderForms(data.forms);
-    this.renderOtherElements(data);
-    this.renderMediaSection(data);
-    this.renderNavigationSection(data);
-    this.renderSemanticSection(data);
-    this.renderScriptsSection(data);
-    this.renderAccessibilitySection(data);
-    this.renderMetaSection(data);
-    this.renderHeadingsSection(data);
-    this.renderStorageSection(data);
-    
-    if (!this.sectionsInitialized) {
-      this.bindCollapsibleSections();
-      this.sectionsInitialized = true;
-    }
-    
-    this.results.classList.remove('hidden');
-    this.footer.classList.remove('hidden');
-  }
-
-  async saveScanData(data) {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      await chrome.storage.local.set({
-        lastScan: data,
-        lastScanUrl: tab?.url || ''
-      });
-    } catch (e) {
-      console.error('Failed to save scan data:', e);
-    }
-  }
-
-  bindCollapsibleSections() {
-    document.querySelectorAll('.section-header').forEach(header => {
-      const newHeader = header.cloneNode(true);
-      header.parentNode.replaceChild(newHeader, header);
-      
-      newHeader.addEventListener('click', () => {
-        const targetId = newHeader.dataset.target;
-        const content = document.getElementById(targetId);
-        const toggle = newHeader.querySelector('.section-toggle');
-        if (content && toggle) {
-          content.classList.toggle('expanded');
-          toggle.classList.toggle('expanded');
-        }
-      });
-    });
-  }
-
-  calculateScores(data) {
-    const scores = {
-      seo: { score: 0, max: 100, issues: [] },
-      accessibility: { score: 0, max: 100, issues: [] },
-      performance: { score: 0, max: 100, issues: [] },
-      bestPractices: { score: 0, max: 100, issues: [] }
-    };
-
-    // SEO Score
-    let seoPoints = 0;
-    if (data.meta?.title) seoPoints += 15; else scores.seo.issues.push('Missing title');
-    if (data.meta?.description) seoPoints += 15; else scores.seo.issues.push('Missing meta description');
-    if (data.meta?.canonical) seoPoints += 10; else scores.seo.issues.push('Missing canonical URL');
-    if (data.headings?.some(h => h.level === 'H1')) seoPoints += 15; else scores.seo.issues.push('Missing H1 heading');
-    if (data.meta?.openGraph?.length > 0) seoPoints += 10; else scores.seo.issues.push('Missing Open Graph tags');
-    if (data.meta?.viewport) seoPoints += 10; else scores.seo.issues.push('Missing viewport meta');
-    if (data.meta?.language) seoPoints += 10; else scores.seo.issues.push('Missing lang attribute');
-    if (data.media?.images?.withAlt === data.media?.images?.total) seoPoints += 15; 
-    else if (data.media?.images?.total > 0) scores.seo.issues.push(`${data.media?.images?.withoutAlt || 0} images missing alt text`);
-    scores.seo.score = Math.min(100, seoPoints);
-
-    // Accessibility Score
-    let a11yPoints = 0;
-    const a11y = data.accessibility || {};
-    if (a11y.langAttribute) a11yPoints += 15; else scores.accessibility.issues.push('Missing lang attribute');
-    if (a11y.skipLinks > 0) a11yPoints += 10; else scores.accessibility.issues.push('No skip links');
-    if (a11y.labels >= data.totalFields * 0.8) a11yPoints += 20; else scores.accessibility.issues.push('Many form fields missing labels');
-    if (a11y.altTextCoverage >= 90) a11yPoints += 20; else scores.accessibility.issues.push(`Alt text coverage: ${a11y.altTextCoverage || 0}%`);
-    if (a11y.ariaLabels > 0 || a11y.ariaRoles > 0) a11yPoints += 15;
-    if (data.headings?.length > 0) a11yPoints += 10;
-    if (data.semantic?.main > 0) a11yPoints += 10; else scores.accessibility.issues.push('Missing <main> landmark');
-    scores.accessibility.score = Math.min(100, a11yPoints);
-
-    // Performance Score
-    let perfPoints = 100;
-    const perf = data.performance || {};
-    if (perf.domElements > 1500) { perfPoints -= 20; scores.performance.issues.push(`High DOM count: ${perf.domElements}`); }
-    if (perf.domDepth > 15) { perfPoints -= 10; scores.performance.issues.push(`Deep DOM: ${perf.domDepth} levels`); }
-    if (perf.inlineStyles > 50) { perfPoints -= 15; scores.performance.issues.push(`Many inline styles: ${perf.inlineStyles}`); }
-    if (perf.imagesWithoutDimensions > 5) { perfPoints -= 15; scores.performance.issues.push(`Images without dimensions: ${perf.imagesWithoutDimensions}`); }
-    if ((data.scripts?.total || 0) > 30) { perfPoints -= 15; scores.performance.issues.push(`Many scripts: ${data.scripts?.total}`); }
-    if ((data.scripts?.inline || 0) > 10) { perfPoints -= 10; scores.performance.issues.push(`Many inline scripts: ${data.scripts?.inline}`); }
-    scores.performance.score = Math.max(0, perfPoints);
-
-    // Best Practices Score
-    let bpPoints = 100;
-    if (perf.deprecatedElements > 0) { bpPoints -= 20; scores.bestPractices.issues.push(`Deprecated elements: ${perf.deprecatedElements}`); }
-    if (!data.meta?.charset) { bpPoints -= 10; scores.bestPractices.issues.push('Missing charset'); }
-    if (!data.meta?.favicon) { bpPoints -= 10; scores.bestPractices.issues.push('Missing favicon'); }
-    if ((data.iframes?.total || 0) > 5) { bpPoints -= 10; scores.bestPractices.issues.push(`Many iframes: ${data.iframes?.total}`); }
-    const externalLinks = data.navigation?.externalLinks || 0;
-    const linksWithoutRel = data.links?.filter(l => l.type === 'external' && !l.rel?.includes('noopener'))?.length || 0;
-    if (linksWithoutRel > 0) { bpPoints -= 15; scores.bestPractices.issues.push('External links missing rel="noopener"'); }
-    scores.bestPractices.score = Math.max(0, bpPoints);
-
-    return scores;
-  }
-
-  renderScoreSection(data) {
-    const container = document.getElementById('scoreSection');
-    if (!container) return;
-
-    const scores = this.calculateScores(data);
-    const overall = Math.round((scores.seo.score + scores.accessibility.score + scores.performance.score + scores.bestPractices.score) / 4);
-
-    const getScoreClass = (score) => {
-      if (score >= 80) return 'good';
-      if (score >= 50) return 'warning';
-      return 'poor';
-    };
-
-    const getScoreEmoji = (score) => {
-      if (score >= 80) return '✅';
-      if (score >= 50) return '⚠️';
-      return '❌';
-    };
-
-    container.innerHTML = `
-      <div class="overall-score ${getScoreClass(overall)}">
-        <div class="overall-score-value">${overall}</div>
-        <div class="overall-score-label">Overall Score</div>
-      </div>
-      <div class="score-grid">
-        <div class="score-item" title="${scores.seo.issues.join('\\n') || 'Good!'}">
-          <div class="score-header">
-            <span>${getScoreEmoji(scores.seo.score)} SEO</span>
-            <span class="score-value ${getScoreClass(scores.seo.score)}">${scores.seo.score}</span>
-          </div>
-          <div class="score-bar"><div class="score-fill ${getScoreClass(scores.seo.score)}" style="width: ${scores.seo.score}%"></div></div>
-        </div>
-        <div class="score-item" title="${scores.accessibility.issues.join('\\n') || 'Good!'}">
-          <div class="score-header">
-            <span>${getScoreEmoji(scores.accessibility.score)} Accessibility</span>
-            <span class="score-value ${getScoreClass(scores.accessibility.score)}">${scores.accessibility.score}</span>
-          </div>
-          <div class="score-bar"><div class="score-fill ${getScoreClass(scores.accessibility.score)}" style="width: ${scores.accessibility.score}%"></div></div>
-        </div>
-        <div class="score-item" title="${scores.performance.issues.join('\\n') || 'Good!'}">
-          <div class="score-header">
-            <span>${getScoreEmoji(scores.performance.score)} Performance</span>
-            <span class="score-value ${getScoreClass(scores.performance.score)}">${scores.performance.score}</span>
-          </div>
-          <div class="score-bar"><div class="score-fill ${getScoreClass(scores.performance.score)}" style="width: ${scores.performance.score}%"></div></div>
-        </div>
-        <div class="score-item" title="${scores.bestPractices.issues.join('\\n') || 'Good!'}">
-          <div class="score-header">
-            <span>${getScoreEmoji(scores.bestPractices.score)} Best Practices</span>
-            <span class="score-value ${getScoreClass(scores.bestPractices.score)}">${scores.bestPractices.score}</span>
-          </div>
-          <div class="score-bar"><div class="score-fill ${getScoreClass(scores.bestPractices.score)}" style="width: ${scores.bestPractices.score}%"></div></div>
-        </div>
-      </div>
-    `;
-  }
-
-  handleSearch(query) {
-    query = query.toLowerCase().trim();
-    
-    document.querySelectorAll('.field-item, .other-item, .meta-item, .heading-item').forEach(item => {
-      const text = item.textContent.toLowerCase();
-      item.style.display = text.includes(query) || query === '' ? '' : 'none';
-    });
-
-    document.querySelectorAll('.form-card').forEach(card => {
-      const text = card.textContent.toLowerCase();
-      card.style.display = text.includes(query) || query === '' ? '' : 'none';
-    });
-  }
-
-  renderHeadingsSection(data) {
-    const container = document.getElementById('headingsSection');
-    if (!container) return;
-
-    if (!data.headings || data.headings.length === 0) {
-      container.innerHTML = '<p class="empty-message">No headings found on this page.</p>';
-      return;
-    }
-
-    container.innerHTML = data.headings.map(h => {
-      const level = h.level.toLowerCase();
-      return `
-        <div class="heading-item ${level}" data-element-selector="${this.escapeHtml(h.id ? '#' + h.id : h.level)}">
-          <span class="heading-level">${this.escapeHtml(h.level)}</span>
-          <span class="heading-text">${this.escapeHtml(h.text) || '(empty)'}</span>
-        </div>
-      `;
-    }).join('');
-
-    this.bindHighlightEvents(container);
-  }
-
-  bindHighlightEvents(container) {
-    container.querySelectorAll('[data-element-selector]').forEach(item => {
-      item.addEventListener('mouseenter', () => {
-        const selector = item.dataset.elementSelector;
-        this.highlightElement(selector);
-      });
-      item.addEventListener('mouseleave', () => {
-        this.removeHighlight();
-      });
-      item.addEventListener('click', () => {
-        const selector = item.dataset.elementSelector;
-        this.scrollToElement(selector);
-      });
-    });
-  }
-
-  async highlightElement(selector) {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (sel) => {
-          const existing = document.getElementById('scanvui-highlight');
-          if (existing) existing.remove();
-
-          let element = null;
-          try {
-            element = document.querySelector(sel);
-          } catch (e) {
-            const elements = document.querySelectorAll(sel);
-            if (elements.length > 0) element = elements[0];
-          }
-
-          if (element) {
-            const rect = element.getBoundingClientRect();
-            const highlight = document.createElement('div');
-            highlight.id = 'scanvui-highlight';
-            highlight.style.cssText = `
-              position: fixed;
-              top: ${rect.top - 4}px;
-              left: ${rect.left - 4}px;
-              width: ${rect.width + 8}px;
-              height: ${rect.height + 8}px;
-              border: 3px solid #667eea;
-              background: rgba(102, 126, 234, 0.15);
-              border-radius: 4px;
-              pointer-events: none;
-              z-index: 999999;
-              transition: all 0.2s ease;
-              box-shadow: 0 0 20px rgba(102, 126, 234, 0.4);
-            `;
-            document.body.appendChild(highlight);
-          }
-        },
-        args: [selector]
-      });
-    } catch (e) {
-      console.log('Highlight failed:', e);
-    }
-  }
-
-  async removeHighlight() {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => {
-          const existing = document.getElementById('scanvui-highlight');
-          if (existing) existing.remove();
-        }
-      });
-    } catch (e) {}
-  }
-
-  async scrollToElement(selector) {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (sel) => {
-          let element = null;
-          try {
-            element = document.querySelector(sel);
-          } catch (e) {
-            const elements = document.querySelectorAll(sel);
-            if (elements.length > 0) element = elements[0];
-          }
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        },
-        args: [selector]
-      });
-    } catch (e) {}
-  }
-
   async scanPage() {
     this.showLoading();
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
-      if (!tab) {
-        throw new Error('No active tab found');
-      }
-
+      if (!tab) throw new Error('Không tìm thấy tab');
       if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-        throw new Error('Cannot scan Chrome internal pages');
+        throw new Error('Không thể quét trang Chrome nội bộ');
       }
 
       const results = await chrome.scripting.executeScript({
@@ -455,601 +226,798 @@ class PopupController {
         world: 'MAIN'
       });
 
-      if (results && results[0] && results[0].result) {
+      if (results?.[0]?.result) {
         this.showResults(results[0].result);
       } else {
-        throw new Error('Failed to scan page content');
+        throw new Error('Không thể quét trang');
       }
     } catch (err) {
-      console.error('Scan error:', err);
-      this.showError(err.message || 'Failed to scan page');
+      this.showError(err.message || 'Lỗi không xác định');
     }
   }
 
-  renderSummary(data) {
-    const items = [
-      { icon: '📝', label: 'Forms', value: data.forms.length },
-      { icon: '✏️', label: 'Input Fields', value: data.totalFields },
-      { icon: '🔘', label: 'Buttons', value: data.buttons.length },
-      { icon: '🔗', label: 'Links', value: data.linksTotal || data.links.length },
-      { icon: '🖼️', label: 'Images', value: data.media?.images?.total || data.images },
-      { icon: '📊', label: 'Tables', value: data.tables?.total || data.tables },
-      { icon: '📰', label: 'Headings', value: data.headings?.length || 0 },
-      { icon: '🎬', label: 'Videos', value: data.media?.videos?.total || 0 }
+  async showResults(data, save = true) {
+    this.hideLoading();
+    this.hideWelcome();
+    this.scanData = data;
+
+    if (save) {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        await chrome.storage.local.set({
+          lastScan: data,
+          lastScanUrl: tab?.url || ''
+        });
+      } catch (e) {}
+    }
+
+    this.tabNav.classList.remove('hidden');
+    this.tabContent.classList.remove('hidden');
+
+    this.renderScores(data);
+    this.renderIssues(data);
+    this.renderQuickStats(data);
+    this.renderDetails(data);
+    
+    this.switchTab('results');
+  }
+
+  // ============================================
+  // RENDER RESULTS
+  // ============================================
+  calculateScores(data) {
+    const scores = {
+      seo: { score: 0, issues: [] },
+      a11y: { score: 0, issues: [] },
+      perf: { score: 0, issues: [] },
+      bp: { score: 0, issues: [] }
+    };
+
+    // SEO
+    let seo = 0;
+    if (data.meta?.title) seo += 20; else scores.seo.issues.push('Thiếu title');
+    if (data.meta?.description) seo += 20; else scores.seo.issues.push('Thiếu meta description');
+    if (data.headings?.some(h => h.level === 'H1')) seo += 15; else scores.seo.issues.push('Thiếu H1');
+    if (data.meta?.canonical) seo += 10; else scores.seo.issues.push('Thiếu canonical URL');
+    if (data.meta?.openGraph?.length > 0) seo += 10;
+    if (data.meta?.viewport) seo += 10;
+    if (data.meta?.language) seo += 10;
+    if (data.media?.images?.withAlt === data.media?.images?.total) seo += 5;
+    else if (data.media?.images?.withoutAlt > 0) scores.seo.issues.push(`${data.media.images.withoutAlt} ảnh thiếu alt`);
+    scores.seo.score = Math.min(100, seo);
+
+    // Accessibility
+    let a11y = 0;
+    const acc = data.accessibility || {};
+    if (acc.langAttribute) a11y += 15; else scores.a11y.issues.push('Thiếu lang attribute');
+    if (acc.skipLinks > 0) a11y += 10; else scores.a11y.issues.push('Không có skip links');
+    if (acc.labels >= data.totalFields * 0.8) a11y += 25; else scores.a11y.issues.push('Form fields thiếu labels');
+    if (acc.altTextCoverage >= 90) a11y += 20;
+    if (acc.ariaLabels > 0 || acc.ariaRoles > 0) a11y += 15;
+    if (data.semantic?.main > 0) a11y += 15; else scores.a11y.issues.push('Thiếu <main> landmark');
+    scores.a11y.score = Math.min(100, a11y);
+
+    // Performance
+    let perf = 100;
+    const p = data.performance || {};
+    if (p.domElements > 1500) { perf -= 20; scores.perf.issues.push(`DOM quá lớn: ${p.domElements}`); }
+    if (p.domDepth > 15) { perf -= 10; scores.perf.issues.push(`DOM quá sâu: ${p.domDepth}`); }
+    if (p.inlineStyles > 50) { perf -= 15; scores.perf.issues.push(`Nhiều inline styles`); }
+    if ((data.scripts?.total || 0) > 30) { perf -= 15; scores.perf.issues.push(`Nhiều scripts: ${data.scripts.total}`); }
+    scores.perf.score = Math.max(0, perf);
+
+    // Best Practices
+    let bp = 100;
+    if (p.deprecatedElements > 0) { bp -= 20; scores.bp.issues.push('Có elements lỗi thời'); }
+    if (!data.meta?.charset) { bp -= 10; scores.bp.issues.push('Thiếu charset'); }
+    if (!data.meta?.favicon) { bp -= 10; scores.bp.issues.push('Thiếu favicon'); }
+    scores.bp.score = Math.max(0, bp);
+
+    return scores;
+  }
+
+  getScoreClass(score) {
+    if (score >= 80) return 'good';
+    if (score >= 50) return 'warning';
+    return 'poor';
+  }
+
+  renderScores(data) {
+    const scores = this.calculateScores(data);
+    
+    this.scoreCards.innerHTML = `
+      <div class="score-card">
+        <div class="score-value ${this.getScoreClass(scores.seo.score)}">${scores.seo.score}</div>
+        <div class="score-label">SEO</div>
+        <div class="score-bar"><div class="score-fill ${this.getScoreClass(scores.seo.score)}" style="width:${scores.seo.score}%"></div></div>
+      </div>
+      <div class="score-card">
+        <div class="score-value ${this.getScoreClass(scores.a11y.score)}">${scores.a11y.score}</div>
+        <div class="score-label">Accessibility</div>
+        <div class="score-bar"><div class="score-fill ${this.getScoreClass(scores.a11y.score)}" style="width:${scores.a11y.score}%"></div></div>
+      </div>
+      <div class="score-card">
+        <div class="score-value ${this.getScoreClass(scores.perf.score)}">${scores.perf.score}</div>
+        <div class="score-label">Performance</div>
+        <div class="score-bar"><div class="score-fill ${this.getScoreClass(scores.perf.score)}" style="width:${scores.perf.score}%"></div></div>
+      </div>
+      <div class="score-card">
+        <div class="score-value ${this.getScoreClass(scores.bp.score)}">${scores.bp.score}</div>
+        <div class="score-label">Best Practices</div>
+        <div class="score-bar"><div class="score-fill ${this.getScoreClass(scores.bp.score)}" style="width:${scores.bp.score}%"></div></div>
+      </div>
+    `;
+  }
+
+  renderIssues(data) {
+    const scores = this.calculateScores(data);
+    const allIssues = [
+      ...scores.seo.issues.map(i => ({ type: 'error', text: i })),
+      ...scores.a11y.issues.map(i => ({ type: 'warning', text: i })),
+      ...scores.perf.issues.map(i => ({ type: 'warning', text: i })),
+      ...scores.bp.issues.map(i => ({ type: 'info', text: i }))
     ];
 
-    this.summaryGrid.innerHTML = items.map(item => `
-      <div class="summary-item">
-        <span class="summary-icon">${item.icon}</span>
-        <div class="summary-info">
-          <span class="summary-label">${this.escapeHtml(item.label)}</span>
-          <span class="summary-value">${item.value}</span>
+    this.issuesCount.textContent = allIssues.length;
+    this.issuesCount.classList.toggle('success', allIssues.length === 0);
+
+    if (allIssues.length === 0) {
+      this.issuesContent.innerHTML = '<div class="no-issues">✅ Không phát hiện vấn đề!</div>';
+    } else {
+      this.issuesContent.innerHTML = allIssues.map(issue => `
+        <div class="issue-item">
+          <span class="issue-icon ${issue.type}">${issue.type === 'error' ? '❌' : issue.type === 'warning' ? '⚠️' : 'ℹ️'}</span>
+          <span class="issue-text">${this.escapeHtml(issue.text)}</span>
         </div>
+      `).join('');
+    }
+  }
+
+  renderQuickStats(data) {
+    const stats = [
+      { label: 'Forms', value: data.forms?.length || 0 },
+      { label: 'Links', value: data.linksTotal || 0 },
+      { label: 'Images', value: data.media?.images?.total || 0 },
+      { label: 'Scripts', value: data.scripts?.total || 0 }
+    ];
+
+    this.quickStats.innerHTML = stats.map(s => `
+      <div class="stat-item">
+        <div class="stat-value">${s.value}</div>
+        <div class="stat-label">${s.label}</div>
       </div>
     `).join('');
   }
 
-  renderForms(forms) {
-    if (forms.length === 0) {
-      this.formsContainer.innerHTML = '<p class="empty-message">No forms detected on this page.</p>';
-      return;
+  renderDetails(data) {
+    // Meta
+    const meta = data.meta || {};
+    this.metaDetail.innerHTML = `
+      <div class="detail-row"><span class="detail-label">Title</span><span class="detail-value">${this.escapeHtml(meta.title) || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">Description</span><span class="detail-value">${this.escapeHtml(meta.description) || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">Charset</span><span class="detail-value">${meta.charset || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">Viewport</span><span class="detail-value">${meta.viewport ? '✓' : '✗'}</span></div>
+      <div class="detail-row"><span class="detail-label">Language</span><span class="detail-value">${meta.language || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">Canonical</span><span class="detail-value">${meta.canonical ? '✓' : '✗'}</span></div>
+      <div class="detail-row"><span class="detail-label">Open Graph</span><span class="detail-value">${meta.openGraph?.length || 0} tags</span></div>
+    `;
+
+    // Forms
+    if (data.forms?.length > 0) {
+      this.formsDetail.innerHTML = data.forms.map((form, i) => `
+        <div style="margin-bottom:10px;padding:8px;background:var(--bg-secondary);border-radius:6px;">
+          <strong>${form.name || 'Form #' + (i + 1)}</strong> - ${form.fields?.length || 0} fields
+          ${form.method ? `<span style="margin-left:8px;color:var(--success)">${form.method}</span>` : ''}
+        </div>
+      `).join('');
+    } else {
+      this.formsDetail.innerHTML = '<em>Không có forms</em>';
     }
 
-    this.formsContainer.innerHTML = forms.map((form, index) => `
-      <div class="form-card">
-        <div class="form-header" data-form-index="${index}">
-          <span class="form-toggle">▶</span>
-          <span class="form-title">${this.escapeHtml(form.name) || `Form #${index + 1}`}</span>
-          <span class="form-badge">${form.fields.length} fields</span>
-          ${form.method ? `<span class="form-method">${this.escapeHtml(form.method)}</span>` : ''}
-        </div>
-        <div class="form-fields" id="form-fields-${index}">
-          ${form.action ? `<div class="form-action">Action: ${this.escapeHtml(form.action)}</div>` : ''}
-          ${this.renderFields(form.fields)}
-        </div>
-      </div>
-    `).join('');
+    // A11y
+    const a11y = data.accessibility || {};
+    this.a11yDetail.innerHTML = `
+      <div class="detail-row"><span class="detail-label">Alt Text Coverage</span><span class="detail-value">${a11y.altTextCoverage || 0}%</span></div>
+      <div class="detail-row"><span class="detail-label">ARIA Labels</span><span class="detail-value">${a11y.ariaLabels || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">ARIA Roles</span><span class="detail-value">${a11y.ariaRoles || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">Form Labels</span><span class="detail-value">${a11y.labels || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">Skip Links</span><span class="detail-value">${a11y.skipLinks || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">Lang Attribute</span><span class="detail-value">${a11y.langAttribute ? '✓' : '✗'}</span></div>
+    `;
 
-    this.formsContainer.querySelectorAll('.form-header').forEach(header => {
-      header.addEventListener('click', () => this.toggleForm(header));
+    // Tech
+    const perf = data.performance || {};
+    this.techDetail.innerHTML = `
+      <div class="detail-row"><span class="detail-label">DOM Elements</span><span class="detail-value">${perf.domElements || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">DOM Depth</span><span class="detail-value">${perf.domDepth || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">Shadow DOM</span><span class="detail-value">${data.shadowDomCount || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">Custom Elements</span><span class="detail-value">${data.customElements || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">Inline Styles</span><span class="detail-value">${perf.inlineStyles || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">Scripts</span><span class="detail-value">${data.scripts?.total || 0}</span></div>
+      <div class="detail-row"><span class="detail-label">Stylesheets</span><span class="detail-value">${data.stylesheets?.total || 0}</span></div>
+    `;
+  }
+
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+  }
+
+  // ============================================
+  // TOOLS
+  // ============================================
+  async applyXray() {
+    const types = [];
+    document.querySelectorAll('[data-xray]:checked').forEach(cb => {
+      types.push(cb.dataset.xray);
+    });
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: injectXray,
+        args: [types]
+      });
+      this.showToast('X-Ray đã bật!');
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
+    }
+  }
+
+  async clearXray() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          document.querySelectorAll('[data-scanvui-xray]').forEach(el => {
+            el.style.outline = '';
+            el.style.backgroundColor = '';
+            el.removeAttribute('data-scanvui-xray');
+          });
+        }
+      });
+      this.showToast('X-Ray đã tắt');
+    } catch (e) {}
+  }
+
+  async fillAllForms() {
+    const locale = document.getElementById('fillLocale')?.value || 'vi';
+    const mode = document.getElementById('fillMode')?.value || 'realistic';
+    
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: fillFormsWithData,
+        args: [locale, mode]
+      });
+      this.showToast('Đã điền forms!');
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
+    }
+  }
+
+  async clearAllForms() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          document.querySelectorAll('input, textarea, select').forEach(el => {
+            if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+            else el.value = '';
+          });
+        }
+      });
+      this.showToast('Đã xóa forms');
+    } catch (e) {}
+  }
+
+  async startElementPicker() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: startPicker
+      });
+      this.showToast('Click vào element trên trang (ESC để hủy)');
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
+    }
+  }
+
+  updateSelectorDisplay(selectors) {
+    const result = document.getElementById('selectorResult');
+    if (result && selectors) {
+      result.classList.remove('hidden');
+      document.getElementById('cssSelector').textContent = selectors.css || '-';
+      const xpathEl = document.getElementById('xpathSelector');
+      if (xpathEl) xpathEl.textContent = selectors.xpath || '-';
+      const playwrightEl = document.getElementById('playwrightSelector');
+      if (playwrightEl) playwrightEl.textContent = selectors.playwright || '-';
+    }
+  }
+
+  async openViewport(width, height) {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.windows.create({
+      url: tab.url,
+      width: width + 16,
+      height: height + 88,
+      type: 'popup'
     });
   }
 
-  renderFields(fields) {
-    if (fields.length === 0) {
-      return '<p class="empty-message">No fields in this form.</p>';
-    }
+  async applyA11ySimulation(type) {
+    const filters = {
+      protanopia: 'sepia(100%) saturate(300%) hue-rotate(-50deg)',
+      deuteranopia: 'sepia(100%) saturate(300%) hue-rotate(50deg)',
+      tritanopia: 'sepia(100%) saturate(300%) hue-rotate(180deg)',
+      achromatopsia: 'grayscale(100%)',
+      blurry: 'blur(2px)'
+    };
 
-    return fields.map(field => {
-      const icon = this.getFieldIcon(field.type);
-      const tags = [];
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (filter) => { document.documentElement.style.filter = filter; },
+        args: [filters[type] || '']
+      });
       
-      if (field.type) tags.push(`<span class="field-tag type">${this.escapeHtml(field.type)}</span>`);
-      if (field.required) tags.push(`<span class="field-tag required">required</span>`);
-      if (field.pattern) tags.push(`<span class="field-tag">pattern</span>`);
-      if (field.minLength || field.maxLength) tags.push(`<span class="field-tag">length</span>`);
-      if (field.inShadowDOM) tags.push(`<span class="field-tag shadow">shadow</span>`);
-      if (field.disabled) tags.push(`<span class="field-tag disabled">disabled</span>`);
-      if (field.readonly) tags.push(`<span class="field-tag">readonly</span>`);
-
-      const selector = field.id ? `#${field.id}` : (field.name ? `[name="${field.name}"]` : field.tag);
-
-      return `
-        <div class="field-item" data-element-selector="${this.escapeHtml(selector)}">
-          <span class="field-icon">${icon}</span>
-          <div class="field-info">
-            <div class="field-name">${this.escapeHtml(field.label || field.name || field.id || field.placeholder) || '(unnamed)'}</div>
-            ${field.name ? `<div class="field-attr">name: ${this.escapeHtml(field.name)}</div>` : ''}
-            ${field.id ? `<div class="field-attr">id: ${this.escapeHtml(field.id)}</div>` : ''}
-            <div class="field-meta">${tags.join('')}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  getFieldIcon(type) {
-    const icons = {
-      'text': '📝', 'email': '📧', 'password': '🔒', 'number': '🔢',
-      'tel': '📞', 'url': '🌐', 'date': '📅', 'datetime-local': '📅',
-      'time': '🕐', 'file': '📎', 'checkbox': '☑️', 'radio': '🔘',
-      'select': '📋', 'textarea': '📄', 'hidden': '👁️', 'submit': '✅',
-      'button': '🔲', 'search': '🔍', 'color': '🎨', 'range': '📊'
-    };
-    return icons[type] || '📝';
-  }
-
-  toggleForm(header) {
-    const index = header.dataset.formIndex;
-    const fields = document.getElementById(`form-fields-${index}`);
-    const toggle = header.querySelector('.form-toggle');
-    
-    fields.classList.toggle('expanded');
-    toggle.classList.toggle('expanded');
-
-    if (fields.classList.contains('expanded')) {
-      this.bindHighlightEvents(fields);
-    }
-  }
-
-  renderOtherElements(data) {
-    const items = [
-      { icon: '📦', label: 'iFrames', count: data.iframes?.total || data.iframes || 0 },
-      { icon: '🌑', label: 'Shadow DOM Elements', count: data.shadowDomCount || 0 },
-      { icon: '🧩', label: 'Custom Elements', count: data.customElements || 0 },
-      { icon: '📜', label: 'Scripts', count: data.scripts?.total || 0 },
-      { icon: '🎨', label: 'Stylesheets', count: data.stylesheets?.total || 0 },
-      { icon: '🔤', label: 'Fonts', count: data.fonts?.length || 0 }
-    ];
-
-    this.otherElements.innerHTML = items.map(item => `
-      <div class="other-item">
-        <span class="other-icon">${item.icon}</span>
-        <span class="other-label">${item.label}</span>
-        <span class="other-count">${item.count}</span>
-      </div>
-    `).join('');
-  }
-
-  renderMediaSection(data) {
-    const container = document.getElementById('mediaSection');
-    if (!container || !data.media) return;
-
-    const items = [
-      { icon: '🖼️', label: 'Images', count: data.media.images?.total || 0, details: `${data.media.images?.withAlt || 0} with alt` },
-      { icon: '🎬', label: 'Videos', count: data.media.videos?.total || 0 },
-      { icon: '🎵', label: 'Audio', count: data.media.audio?.total || 0 },
-      { icon: '📐', label: 'SVGs', count: data.media.svg?.total || 0 },
-      { icon: '🖼️', label: 'Canvas', count: data.media.canvas || 0 }
-    ];
-
-    container.innerHTML = items.map(item => `
-      <div class="other-item">
-        <span class="other-icon">${item.icon}</span>
-        <span class="other-label">${item.label}</span>
-        <span class="other-count">${item.count}</span>
-        ${item.details ? `<span class="other-detail">(${item.details})</span>` : ''}
-      </div>
-    `).join('');
-  }
-
-  renderNavigationSection(data) {
-    const container = document.getElementById('navigationSection');
-    if (!container || !data.navigation) return;
-
-    const nav = data.navigation;
-    const items = [
-      { icon: '🧭', label: 'Nav Elements', count: nav.navElements || 0 },
-      { icon: '📋', label: 'Menus', count: nav.menus || 0 },
-      { icon: '🔗', label: 'Internal Links', count: nav.internalLinks || 0 },
-      { icon: '🌐', label: 'External Links', count: nav.externalLinks || 0 },
-      { icon: '⚓', label: 'Anchor Links', count: nav.anchorLinks || 0 },
-      { icon: '📞', label: 'Tel/Mail Links', count: nav.telMailLinks || 0 }
-    ];
-
-    container.innerHTML = items.map(item => `
-      <div class="other-item">
-        <span class="other-icon">${item.icon}</span>
-        <span class="other-label">${item.label}</span>
-        <span class="other-count">${item.count}</span>
-      </div>
-    `).join('');
-  }
-
-  renderSemanticSection(data) {
-    const container = document.getElementById('semanticSection');
-    if (!container || !data.semantic) return;
-
-    const sem = data.semantic;
-    const items = [
-      { icon: '📰', label: 'Header', count: sem.header || 0 },
-      { icon: '📄', label: 'Main', count: sem.main || 0 },
-      { icon: '📦', label: 'Footer', count: sem.footer || 0 },
-      { icon: '📑', label: 'Article', count: sem.article || 0 },
-      { icon: '📂', label: 'Section', count: sem.section || 0 },
-      { icon: '📎', label: 'Aside', count: sem.aside || 0 }
-    ];
-
-    container.innerHTML = items.map(item => `
-      <div class="other-item">
-        <span class="other-icon">${item.icon}</span>
-        <span class="other-label">${item.label}</span>
-        <span class="other-count">${item.count}</span>
-      </div>
-    `).join('');
-  }
-
-  renderScriptsSection(data) {
-    const container = document.getElementById('scriptsSection');
-    if (!container || !data.scripts) return;
-
-    const scripts = data.scripts;
-    const stylesheets = data.stylesheets || {};
-    
-    container.innerHTML = `
-      <div class="subsection-title">Scripts</div>
-      <div class="other-item">
-        <span class="other-icon">📜</span>
-        <span class="other-label">Total Scripts</span>
-        <span class="other-count">${scripts.total || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">🔗</span>
-        <span class="other-label">External</span>
-        <span class="other-count">${scripts.external || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">📝</span>
-        <span class="other-label">Inline</span>
-        <span class="other-count">${scripts.inline || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">📦</span>
-        <span class="other-label">Modules</span>
-        <span class="other-count">${scripts.modules || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">⚡</span>
-        <span class="other-label">Async/Defer</span>
-        <span class="other-count">${(scripts.async || 0) + (scripts.defer || 0)}</span>
-      </div>
-      <div class="subsection-title">Stylesheets</div>
-      <div class="other-item">
-        <span class="other-icon">🎨</span>
-        <span class="other-label">Total</span>
-        <span class="other-count">${stylesheets.total || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">🔗</span>
-        <span class="other-label">External</span>
-        <span class="other-count">${stylesheets.external || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">📝</span>
-        <span class="other-label">Inline</span>
-        <span class="other-count">${stylesheets.inline || 0}</span>
-      </div>
-    `;
-  }
-
-  renderAccessibilitySection(data) {
-    const container = document.getElementById('accessibilitySection');
-    if (!container || !data.accessibility) return;
-
-    const a11y = data.accessibility;
-    const coverage = a11y.altTextCoverage || 0;
-    const coverageClass = coverage >= 90 ? 'good' : coverage >= 50 ? 'warning' : 'poor';
-
-    container.innerHTML = `
-      <div class="a11y-coverage">
-        <span>Alt Text Coverage</span>
-        <div class="coverage-bar">
-          <div class="coverage-fill ${coverageClass}" style="width: ${coverage}%"></div>
-        </div>
-        <span class="coverage-value">${coverage}%</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">🏷️</span>
-        <span class="other-label">ARIA Labels</span>
-        <span class="other-count">${a11y.ariaLabels || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">🎭</span>
-        <span class="other-label">ARIA Roles</span>
-        <span class="other-count">${a11y.ariaRoles || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">🔘</span>
-        <span class="other-label">Tabindex Elements</span>
-        <span class="other-count">${a11y.tabindex || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">🏷️</span>
-        <span class="other-label">Form Labels</span>
-        <span class="other-count">${a11y.labels || 0}</span>
-      </div>
-      <div class="other-item ${a11y.skipLinks > 0 ? 'success' : 'warning'}">
-        <span class="other-icon">⏭️</span>
-        <span class="other-label">Skip Links</span>
-        <span class="other-count">${a11y.skipLinks || 0}</span>
-      </div>
-      <div class="other-item ${a11y.langAttribute ? 'success' : 'warning'}">
-        <span class="other-icon">🌍</span>
-        <span class="other-label">Lang Attribute</span>
-        <span class="other-count">${a11y.langAttribute ? 'Yes' : 'No'}</span>
-      </div>
-    `;
-  }
-
-  renderMetaSection(data) {
-    const container = document.getElementById('metaSection');
-    if (!container || !data.meta) return;
-
-    const meta = data.meta;
-    container.innerHTML = `
-      <div class="meta-item">
-        <span class="meta-label">Title</span>
-        <span class="meta-value">${this.escapeHtml(meta.title) || '<em>(none)</em>'}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Description</span>
-        <span class="meta-value">${this.escapeHtml(meta.description) || '<em>(none)</em>'}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Keywords</span>
-        <span class="meta-value">${this.escapeHtml(meta.keywords) || '<em>(none)</em>'}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Author</span>
-        <span class="meta-value">${this.escapeHtml(meta.author) || '<em>(none)</em>'}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Viewport</span>
-        <span class="meta-value">${this.escapeHtml(meta.viewport) || '<em>(none)</em>'}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Charset</span>
-        <span class="meta-value">${this.escapeHtml(meta.charset) || '<em>(none)</em>'}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Language</span>
-        <span class="meta-value">${this.escapeHtml(meta.language) || '<em>(none)</em>'}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Canonical</span>
-        <span class="meta-value">${meta.canonical ? 'Yes' : '<em>No</em>'}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Open Graph</span>
-        <span class="meta-value">${meta.openGraph?.length || 0} tags</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Twitter Cards</span>
-        <span class="meta-value">${meta.twitterCards?.length || 0} tags</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Structured Data</span>
-        <span class="meta-value">${meta.structuredData?.length || 0} schemas</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Favicon</span>
-        <span class="meta-value">${meta.favicon ? 'Yes' : '<em>No</em>'}</span>
-      </div>
-    `;
-  }
-
-  renderStorageSection(data) {
-    const container = document.getElementById('storageSection');
-    if (!container || !data.storage) return;
-
-    const storage = data.storage;
-    container.innerHTML = `
-      <div class="other-item">
-        <span class="other-icon">🍪</span>
-        <span class="other-label">Cookies</span>
-        <span class="other-count">${storage.cookies || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">💾</span>
-        <span class="other-label">LocalStorage Keys</span>
-        <span class="other-count">${storage.localStorage || 0}</span>
-      </div>
-      <div class="other-item">
-        <span class="other-icon">📦</span>
-        <span class="other-label">SessionStorage Keys</span>
-        <span class="other-count">${storage.sessionStorage || 0}</span>
-      </div>
-    `;
-  }
-
-  copyAsJson() {
-    if (!this.scanData) return;
-    const detailedJson = this.generateDetailedJson(this.scanData);
-    navigator.clipboard.writeText(JSON.stringify(detailedJson, null, 2))
-      .then(() => this.showToast('Copied JSON to clipboard!'))
-      .catch((err) => this.showToast('Failed to copy: ' + err.message));
-  }
-
-  generateDetailedJson(data) {
-    const scores = this.calculateScores(data);
-    return {
-      scanInfo: {
-        url: data.url,
-        title: data.title,
-        timestamp: data.timestamp,
-        scanVersion: '2.1.0'
-      },
-      scores: {
-        overall: Math.round((scores.seo.score + scores.accessibility.score + scores.performance.score + scores.bestPractices.score) / 4),
-        seo: { score: scores.seo.score, issues: scores.seo.issues },
-        accessibility: { score: scores.accessibility.score, issues: scores.accessibility.issues },
-        performance: { score: scores.performance.score, issues: scores.performance.issues },
-        bestPractices: { score: scores.bestPractices.score, issues: scores.bestPractices.issues }
-      },
-      summary: {
-        totalForms: data.forms.length,
-        totalFields: data.totalFields,
-        totalButtons: data.buttons.length,
-        totalLinks: data.linksTotal || data.links.length,
-        totalImages: data.media?.images?.total || data.images,
-        totalTables: data.tables?.total || data.tables,
-        totalHeadings: data.headings?.length || 0,
-        totalVideos: data.media?.videos?.total || 0,
-        totalScripts: data.scripts?.total || 0,
-        totalStylesheets: data.stylesheets?.total || 0,
-        shadowDomElements: data.shadowDomCount || 0,
-        customElements: data.customElements || 0,
-        iframes: data.iframes?.total || data.iframes || 0
-      },
-      meta: data.meta || {},
-      forms: data.forms,
-      buttons: data.buttons,
-      links: { total: data.linksTotal || data.links.length, items: data.links },
-      headings: data.headings,
-      media: data.media,
-      tables: data.tables,
-      navigation: data.navigation || {},
-      semantic: data.semantic || {},
-      scripts: data.scripts || {},
-      stylesheets: data.stylesheets || {},
-      accessibility: data.accessibility || {},
-      performance: data.performance || {},
-      storage: data.storage || {},
-      iframes: data.iframes
-    };
-  }
-
-  copyAsText() {
-    if (!this.scanData) return;
-    const text = this.formatAsMarkdown(this.scanData);
-    navigator.clipboard.writeText(text)
-      .then(() => this.showToast('Copied Markdown to clipboard!'))
-      .catch((err) => this.showToast('Failed to copy: ' + err.message));
-  }
-
-  formatAsMarkdown(data) {
-    const scores = this.calculateScores(data);
-    const overall = Math.round((scores.seo.score + scores.accessibility.score + scores.performance.score + scores.bestPractices.score) / 4);
-    
-    let md = `# ScanVui Report\n\n`;
-    md += `**URL:** ${data.url}\n`;
-    md += `**Title:** ${data.title}\n`;
-    md += `**Scanned:** ${new Date(data.timestamp).toLocaleString()}\n\n`;
-    md += `---\n\n`;
-
-    md += `## Scores\n\n`;
-    md += `| Category | Score | Status |\n`;
-    md += `|----------|-------|--------|\n`;
-    md += `| **Overall** | ${overall}/100 | ${overall >= 80 ? '✅' : overall >= 50 ? '⚠️' : '❌'} |\n`;
-    md += `| SEO | ${scores.seo.score}/100 | ${scores.seo.score >= 80 ? '✅' : scores.seo.score >= 50 ? '⚠️' : '❌'} |\n`;
-    md += `| Accessibility | ${scores.accessibility.score}/100 | ${scores.accessibility.score >= 80 ? '✅' : scores.accessibility.score >= 50 ? '⚠️' : '❌'} |\n`;
-    md += `| Performance | ${scores.performance.score}/100 | ${scores.performance.score >= 80 ? '✅' : scores.performance.score >= 50 ? '⚠️' : '❌'} |\n`;
-    md += `| Best Practices | ${scores.bestPractices.score}/100 | ${scores.bestPractices.score >= 80 ? '✅' : scores.bestPractices.score >= 50 ? '⚠️' : '❌'} |\n\n`;
-
-    const allIssues = [...scores.seo.issues, ...scores.accessibility.issues, ...scores.performance.issues, ...scores.bestPractices.issues];
-    if (allIssues.length > 0) {
-      md += `### Issues Found\n\n`;
-      allIssues.forEach(issue => {
-        md += `- ⚠️ ${issue}\n`;
+      document.querySelectorAll('.sim-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.sim === type);
       });
-      md += '\n';
+      this.showToast(`Mô phỏng: ${type}`);
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
     }
+  }
 
-    md += `## Summary\n\n`;
-    md += `| Element | Count |\n`;
-    md += `|---------|-------|\n`;
-    md += `| Forms | ${data.forms.length} |\n`;
-    md += `| Input Fields | ${data.totalFields} |\n`;
-    md += `| Buttons | ${data.buttons.length} |\n`;
-    md += `| Links | ${data.linksTotal || data.links.length} |\n`;
-    md += `| Images | ${data.media?.images?.total || data.images} |\n`;
-    md += `| Videos | ${data.media?.videos?.total || 0} |\n`;
-    md += `| Tables | ${data.tables?.total || data.tables} |\n`;
-    md += `| Headings | ${data.headings?.length || 0} |\n`;
-    md += `| Scripts | ${data.scripts?.total || 0} |\n`;
-    md += `| Stylesheets | ${data.stylesheets?.total || 0} |\n`;
-    md += `| iFrames | ${data.iframes?.total || data.iframes || 0} |\n`;
-    md += `| Shadow DOM | ${data.shadowDomCount || 0} |\n`;
-    md += `| Custom Elements | ${data.customElements || 0} |\n\n`;
-
-    if (data.meta) {
-      md += `## Meta Information\n\n`;
-      md += `- **Title:** ${data.meta.title || '(none)'}\n`;
-      md += `- **Description:** ${data.meta.description || '(none)'}\n`;
-      md += `- **Charset:** ${data.meta.charset || '(none)'}\n`;
-      md += `- **Viewport:** ${data.meta.viewport || '(none)'}\n`;
-      md += `- **Language:** ${data.meta.language || '(none)'}\n`;
-      md += `- **Canonical:** ${data.meta.canonical || '(none)'}\n`;
-      md += `- **Favicon:** ${data.meta.favicon ? 'Yes' : 'No'}\n`;
-      md += `- **Open Graph Tags:** ${data.meta.openGraph?.length || 0}\n`;
-      md += `- **Twitter Cards:** ${data.meta.twitterCards?.length || 0}\n`;
-      md += `- **Structured Data:** ${data.meta.structuredData?.length || 0}\n\n`;
-    }
-
-    md += `## Headings Structure\n\n`;
-    if (data.headings?.length > 0) {
-      data.headings.forEach(h => {
-        const indent = '  '.repeat(parseInt(h.level.replace('H', '')) - 1);
-        md += `${indent}- **${h.level}:** ${h.text}\n`;
+  async resetA11ySimulation() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => { document.documentElement.style.filter = ''; }
       });
-    } else {
-      md += `No headings found.\n`;
-    }
-    md += '\n';
+      document.querySelectorAll('.sim-btn').forEach(btn => btn.classList.remove('active'));
+      this.showToast('Đã khôi phục');
+    } catch (e) {}
+  }
 
-    md += `## Forms\n\n`;
-    if (data.forms.length === 0) {
-      md += `No forms detected.\n\n`;
-    } else {
-      data.forms.forEach((form, i) => {
-        md += `### ${form.name || `Form #${i + 1}`}\n\n`;
-        md += `- **Action:** ${form.action || 'N/A'}\n`;
-        md += `- **Method:** ${form.method || 'GET'}\n`;
-        md += `- **Fields:** ${form.fields.length}\n\n`;
-        
-        if (form.fields.length > 0) {
-          md += `| Field | Type | Required |\n`;
-          md += `|-------|------|----------|\n`;
-          form.fields.forEach(field => {
-            const name = field.label || field.name || field.id || '(unnamed)';
-            md += `| ${name} | ${field.type} | ${field.required ? 'Yes' : 'No'} |\n`;
+  async detectTechStack() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: detectTechnologies,
+        world: 'MAIN'
+      });
+      
+      const techs = results?.[0]?.result || [];
+      const container = document.getElementById('techStackResult');
+      
+      if (techs.length === 0) {
+        container.innerHTML = '<span style="color:var(--text-muted)">Không phát hiện</span>';
+      } else {
+        container.innerHTML = techs.map(t => 
+          `<span class="tech-tag">${t.icon} ${t.name}</span>`
+        ).join('');
+      }
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
+    }
+  }
+
+  async scanAllMedia() {
+    try {
+      this.showToast('Đang quét media...');
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          const media = { images: [], videos: [], audio: [] };
+          
+          // Images
+          document.querySelectorAll('img[src]').forEach(img => {
+            const src = img.src;
+            if (src && src.startsWith('http')) {
+              const filename = src.split('/').pop().split('?')[0] || 'image';
+              const ext = filename.split('.').pop().toLowerCase();
+              media.images.push({
+                url: src,
+                filename: filename.substring(0, 50),
+                type: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif'].includes(ext) ? ext : 'img',
+                alt: img.alt || '',
+                width: img.naturalWidth || img.width || 0,
+                height: img.naturalHeight || img.height || 0
+              });
+            }
           });
-          md += '\n';
+          
+          // Background images
+          document.querySelectorAll('*').forEach(el => {
+            const bg = getComputedStyle(el).backgroundImage;
+            if (bg && bg.startsWith('url("http')) {
+              const url = bg.slice(5, -2);
+              const filename = url.split('/').pop().split('?')[0] || 'bg-image';
+              if (!media.images.find(m => m.url === url)) {
+                media.images.push({
+                  url,
+                  filename: filename.substring(0, 50),
+                  type: 'bg',
+                  alt: 'Background',
+                  width: 0,
+                  height: 0
+                });
+              }
+            }
+          });
+          
+          // Videos
+          document.querySelectorAll('video[src], video source[src]').forEach(v => {
+            const src = v.src || v.querySelector('source')?.src;
+            if (src && src.startsWith('http')) {
+              const filename = src.split('/').pop().split('?')[0] || 'video';
+              media.videos.push({
+                url: src,
+                filename: filename.substring(0, 50),
+                type: 'video'
+              });
+            }
+          });
+          
+          // YouTube/Vimeo embeds
+          document.querySelectorAll('iframe[src*="youtube"], iframe[src*="vimeo"]').forEach(iframe => {
+            const src = iframe.src;
+            const isYT = src.includes('youtube');
+            media.videos.push({
+              url: src,
+              filename: isYT ? 'YouTube Video' : 'Vimeo Video',
+              type: isYT ? 'youtube' : 'vimeo',
+              embed: true
+            });
+          });
+          
+          // Audio
+          document.querySelectorAll('audio[src], audio source[src]').forEach(a => {
+            const src = a.src || a.querySelector('source')?.src;
+            if (src && src.startsWith('http')) {
+              const filename = src.split('/').pop().split('?')[0] || 'audio';
+              media.audio.push({
+                url: src,
+                filename: filename.substring(0, 50),
+                type: 'audio'
+              });
+            }
+          });
+          
+          return media;
         }
       });
+      
+      const media = results?.[0]?.result || { images: [], videos: [], audio: [] };
+      this.mediaData = media;
+      this.currentMediaTab = 'images';
+      
+      this.renderMediaResults(media);
+      
+      const total = media.images.length + media.videos.length + media.audio.length;
+      this.showToast(`Tìm thấy ${total} media`);
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
     }
-
-    md += `## Accessibility\n\n`;
-    if (data.accessibility) {
-      md += `- **Alt Text Coverage:** ${data.accessibility.altTextCoverage || 0}%\n`;
-      md += `- **ARIA Labels:** ${data.accessibility.ariaLabels || 0}\n`;
-      md += `- **ARIA Roles:** ${data.accessibility.ariaRoles || 0}\n`;
-      md += `- **Form Labels:** ${data.accessibility.labels || 0}\n`;
-      md += `- **Skip Links:** ${data.accessibility.skipLinks || 0}\n`;
-      md += `- **Lang Attribute:** ${data.accessibility.langAttribute ? 'Yes' : 'No'}\n\n`;
-    }
-
-    md += `## Performance\n\n`;
-    if (data.performance) {
-      md += `- **DOM Elements:** ${data.performance.domElements || 0}\n`;
-      md += `- **DOM Depth:** ${data.performance.domDepth || 0}\n`;
-      md += `- **Inline Styles:** ${data.performance.inlineStyles || 0}\n`;
-      md += `- **Images without dimensions:** ${data.performance.imagesWithoutDimensions || 0}\n`;
-      md += `- **Deprecated Elements:** ${data.performance.deprecatedElements || 0}\n\n`;
-    }
-
-    md += `---\n\n`;
-    md += `*Generated by ScanVui v2.1*\n`;
-
-    return md;
   }
 
-  downloadJson() {
-    if (!this.scanData) return;
-    const detailedJson = this.generateDetailedJson(this.scanData);
-    const blob = new Blob([JSON.stringify(detailedJson, null, 2)], { type: 'application/json' });
+  renderMediaResults(media) {
+    const summary = document.getElementById('mediaSummary');
+    const list = document.getElementById('mediaList');
+    const downloadBtn = document.getElementById('downloadAllMedia');
+    
+    // Summary
+    summary.innerHTML = `
+      <span class="media-stat">🖼️ <strong>${media.images.length}</strong> ảnh</span>
+      <span class="media-stat">🎬 <strong>${media.videos.length}</strong> video</span>
+      <span class="media-stat">🎵 <strong>${media.audio.length}</strong> audio</span>
+    `;
+    
+    // Tabs
+    const tabs = `
+      <div class="media-tabs">
+        <button class="media-tab ${this.currentMediaTab === 'images' ? 'active' : ''}" data-media-tab="images">🖼️ Ảnh (${media.images.length})</button>
+        <button class="media-tab ${this.currentMediaTab === 'videos' ? 'active' : ''}" data-media-tab="videos">🎬 Video (${media.videos.length})</button>
+        <button class="media-tab ${this.currentMediaTab === 'audio' ? 'active' : ''}" data-media-tab="audio">🎵 Audio (${media.audio.length})</button>
+      </div>
+    `;
+    
+    // Items
+    let items = [];
+    if (this.currentMediaTab === 'images') items = media.images;
+    else if (this.currentMediaTab === 'videos') items = media.videos;
+    else if (this.currentMediaTab === 'audio') items = media.audio;
+    
+    let itemsHtml = '';
+    if (items.length === 0) {
+      itemsHtml = '<div class="media-empty">Không có media nào</div>';
+    } else {
+      itemsHtml = items.slice(0, 50).map((item, i) => `
+        <div class="media-item" data-index="${i}" data-type="${this.currentMediaTab}">
+          ${this.currentMediaTab === 'images' ? `<img class="media-thumb" src="${this.escapeHtml(item.url)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+          <div class="media-info">
+            <div class="media-name" title="${this.escapeHtml(item.url)}">${this.escapeHtml(item.filename)}</div>
+            <div class="media-size">${item.width && item.height ? `${item.width}x${item.height}` : item.embed ? 'Embed' : ''}</div>
+          </div>
+          <span class="media-type">${item.type}</span>
+          <div class="media-actions">
+            <button class="media-btn secondary" data-action="copy" title="Copy URL">📋</button>
+            ${!item.embed ? `<button class="media-btn" data-action="download" title="Tải về">⬇️</button>` : `<button class="media-btn" data-action="open" title="Mở">🔗</button>`}
+          </div>
+        </div>
+      `).join('');
+      
+      if (items.length > 50) {
+        itemsHtml += `<div class="media-empty">... và ${items.length - 50} media khác</div>`;
+      }
+    }
+    
+    list.innerHTML = tabs + itemsHtml;
+    
+    // Enable download all button
+    downloadBtn.disabled = media.images.length === 0 && media.videos.length === 0 && media.audio.length === 0;
+    
+    // Bind tab events
+    list.querySelectorAll('.media-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        this.currentMediaTab = tab.dataset.mediaTab;
+        this.renderMediaResults(this.mediaData);
+      });
+    });
+    
+    // Bind item action events
+    list.querySelectorAll('.media-item').forEach(item => {
+      item.querySelectorAll('.media-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const action = btn.dataset.action;
+          const index = parseInt(item.dataset.index);
+          const type = item.dataset.type;
+          
+          let mediaItem;
+          if (type === 'images') mediaItem = this.mediaData.images[index];
+          else if (type === 'videos') mediaItem = this.mediaData.videos[index];
+          else if (type === 'audio') mediaItem = this.mediaData.audio[index];
+          
+          if (mediaItem) {
+            if (action === 'copy') {
+              navigator.clipboard.writeText(mediaItem.url);
+              this.showToast('Đã copy URL!');
+            } else if (action === 'download') {
+              this.downloadSingleMedia(mediaItem);
+            } else if (action === 'open') {
+              chrome.tabs.create({ url: mediaItem.url });
+            }
+          }
+        });
+      });
+    });
+  }
+
+  async downloadSingleMedia(item) {
+    try {
+      const filename = item.filename || 'media';
+      await chrome.downloads.download({ 
+        url: item.url, 
+        filename: `scanvui-media/${filename}` 
+      });
+      this.showToast(`Đang tải: ${filename}`);
+    } catch (e) {
+      // Try opening in new tab if download fails
+      chrome.tabs.create({ url: item.url });
+      this.showToast('Mở trong tab mới (không tải được trực tiếp)');
+    }
+  }
+
+  async downloadAllMedia() {
+    if (!this.mediaData) {
+      this.showToast('Chưa có media. Hãy quét trước!');
+      return;
+    }
+    
+    const allMedia = [
+      ...this.mediaData.images.filter(m => !m.embed),
+      ...this.mediaData.videos.filter(m => !m.embed),
+      ...this.mediaData.audio.filter(m => !m.embed)
+    ];
+    
+    if (allMedia.length === 0) {
+      this.showToast('Không có media để tải!');
+      return;
+    }
+    
+    const toDownload = allMedia.slice(0, 30); // Limit to 30
+    this.showToast(`Đang tải ${toDownload.length} media...`);
+    
+    let success = 0;
+    for (const item of toDownload) {
+      try {
+        await chrome.downloads.download({ 
+          url: item.url, 
+          filename: `scanvui-media/${item.filename || 'media'}` 
+        });
+        success++;
+      } catch (e) {}
+    }
+    
+    this.showToast(`Đã tải ${success}/${toDownload.length} files!`);
+  }
+
+  // ============================================
+  // EXPORT
+  // ============================================
+  async exportReport(format) {
+    if (!this.scanData) {
+      this.showToast('Chưa có dữ liệu. Hãy quét trang trước!');
+      return;
+    }
+
+    const scores = this.calculateScores(this.scanData);
+    const filename = `scanvui-${new Date().toISOString().slice(0, 10)}`;
+
+    switch (format) {
+      case 'json':
+        this.downloadFile(filename + '.json', JSON.stringify(this.scanData, null, 2), 'application/json');
+        break;
+      case 'markdown':
+        this.downloadFile(filename + '.md', this.generateMarkdown(scores), 'text/markdown');
+        break;
+      case 'html':
+        this.downloadFile(filename + '.html', this.generateHTML(scores), 'text/html');
+        break;
+      case 'csv':
+        this.downloadFile(filename + '.csv', this.generateCSV(), 'text/csv');
+        break;
+    }
+    this.showToast('Đã tải xuống!');
+  }
+
+  downloadFile(name, content, type) {
+    const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `scanvui-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
-    this.showToast('Downloaded!');
   }
 
+  copyAsJSON() {
+    if (!this.scanData) return this.showToast('Chưa có dữ liệu');
+    navigator.clipboard.writeText(JSON.stringify(this.scanData, null, 2));
+    this.showToast('Đã copy JSON!');
+  }
+
+  copyAsMarkdown() {
+    if (!this.scanData) return this.showToast('Chưa có dữ liệu');
+    const scores = this.calculateScores(this.scanData);
+    navigator.clipboard.writeText(this.generateMarkdown(scores));
+    this.showToast('Đã copy Markdown!');
+  }
+
+  copyAsSummary() {
+    if (!this.scanData) return this.showToast('Chưa có dữ liệu');
+    const scores = this.calculateScores(this.scanData);
+    const summary = `ScanVui Report: ${this.scanData.url}
+SEO: ${scores.seo.score}/100 | A11y: ${scores.a11y.score}/100 | Perf: ${scores.perf.score}/100
+Forms: ${this.scanData.forms?.length || 0} | Links: ${this.scanData.linksTotal || 0} | Images: ${this.scanData.media?.images?.total || 0}`;
+    navigator.clipboard.writeText(summary);
+    this.showToast('Đã copy tóm tắt!');
+  }
+
+  generateMarkdown(scores) {
+    const d = this.scanData;
+    return `# ScanVui Report
+
+**URL:** ${d.url}
+**Date:** ${new Date(d.timestamp).toLocaleString()}
+
+## Scores
+| Category | Score |
+|----------|-------|
+| SEO | ${scores.seo.score}/100 |
+| Accessibility | ${scores.a11y.score}/100 |
+| Performance | ${scores.perf.score}/100 |
+| Best Practices | ${scores.bp.score}/100 |
+
+## Issues
+${[...scores.seo.issues, ...scores.a11y.issues, ...scores.perf.issues, ...scores.bp.issues].map(i => `- ${i}`).join('\n') || 'No issues found!'}
+
+## Summary
+- Forms: ${d.forms?.length || 0}
+- Links: ${d.linksTotal || 0}
+- Images: ${d.media?.images?.total || 0}
+- Scripts: ${d.scripts?.total || 0}
+
+---
+*Generated by ScanVui v3.1*
+`;
+  }
+
+  generateHTML(scores) {
+    const d = this.scanData;
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ScanVui Report - ${d.url}</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    h1 { color: #6366f1; }
+    .score { display: inline-block; padding: 10px 20px; margin: 5px; border-radius: 8px; color: white; }
+    .good { background: #10b981; }
+    .warning { background: #f59e0b; }
+    .poor { background: #ef4444; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    th { background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <h1>🔍 ScanVui Report</h1>
+  <p><strong>URL:</strong> ${d.url}</p>
+  <p><strong>Date:</strong> ${new Date(d.timestamp).toLocaleString()}</p>
+  
+  <h2>Scores</h2>
+  <div class="score ${this.getScoreClass(scores.seo.score)}">SEO: ${scores.seo.score}</div>
+  <div class="score ${this.getScoreClass(scores.a11y.score)}">A11y: ${scores.a11y.score}</div>
+  <div class="score ${this.getScoreClass(scores.perf.score)}">Perf: ${scores.perf.score}</div>
+  <div class="score ${this.getScoreClass(scores.bp.score)}">BP: ${scores.bp.score}</div>
+
+  <h2>Summary</h2>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td>Forms</td><td>${d.forms?.length || 0}</td></tr>
+    <tr><td>Links</td><td>${d.linksTotal || 0}</td></tr>
+    <tr><td>Images</td><td>${d.media?.images?.total || 0}</td></tr>
+    <tr><td>Scripts</td><td>${d.scripts?.total || 0}</td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  generateCSV() {
+    const d = this.scanData;
+    const scores = this.calculateScores(d);
+    return `Metric,Value
+URL,${d.url}
+Date,${d.timestamp}
+SEO Score,${scores.seo.score}
+A11y Score,${scores.a11y.score}
+Performance Score,${scores.perf.score}
+Best Practices Score,${scores.bp.score}
+Forms,${d.forms?.length || 0}
+Links,${d.linksTotal || 0}
+Images,${d.media?.images?.total || 0}
+Scripts,${d.scripts?.total || 0}`;
+  }
+
+  // ============================================
+  // TOAST
+  // ============================================
   showToast(message) {
-    const existing = document.querySelector('.toast');
-    if (existing) existing.remove();
-    
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => toast.remove(), 2500);
+    this.toast.textContent = message;
+    this.toast.classList.remove('hidden');
+    setTimeout(() => this.toast.classList.add('hidden'), 2500);
   }
 }
 
+// ============================================
+// INJECTED FUNCTIONS
+// ============================================
 function scanPageContent() {
   const result = {
     url: window.location.href,
@@ -1061,466 +1029,449 @@ function scanPageContent() {
     links: [],
     linksTotal: 0,
     headings: [],
-    images: 0,
-    tables: { total: 0, items: [] },
-    iframes: { total: 0, items: [] },
+    tables: { total: 0 },
+    iframes: { total: 0 },
     shadowDomCount: 0,
     customElements: 0,
     meta: {},
-    media: {
-      images: { total: 0, withAlt: 0, withoutAlt: 0, items: [] },
-      videos: { total: 0, items: [] },
-      audio: { total: 0, items: [] },
-      svg: { total: 0 },
-      canvas: 0
-    },
+    media: { images: { total: 0, withAlt: 0, withoutAlt: 0 }, videos: { total: 0 }, audio: { total: 0 } },
     navigation: {},
     semantic: {},
     scripts: {},
     stylesheets: {},
     accessibility: {},
     performance: {},
-    storage: {},
-    fonts: []
+    storage: {}
   };
 
-  const allElements = [];
-  let shadowDomCount = 0;
-  let customElements = 0;
-  let maxDepth = 0;
-
-  function walkDOM(root, depth = 0, inShadow = false) {
+  // Walk DOM
+  let domElements = 0, maxDepth = 0, shadowDomCount = 0, customElements = 0;
+  function walk(node, depth = 0) {
     if (depth > 20) return;
     if (depth > maxDepth) maxDepth = depth;
-    
-    try {
-      const children = root.children || [];
-      for (let i = 0; i < children.length; i++) {
-        const node = children[i];
-        if (!node || node.nodeType !== 1) continue;
-        
-        allElements.push({ element: node, inShadow, depth });
-        
-        if (node.tagName && node.tagName.includes('-')) {
-          customElements++;
-        }
-        
-        if (node.shadowRoot) {
-          shadowDomCount++;
-          walkDOM(node.shadowRoot, depth + 1, true);
-        }
-        
-        walkDOM(node, depth + 1, inShadow);
-      }
-    } catch (e) {}
+    const children = node.children || [];
+    for (let i = 0; i < children.length; i++) {
+      const el = children[i];
+      if (!el || el.nodeType !== 1) continue;
+      domElements++;
+      if (el.tagName?.includes('-')) customElements++;
+      if (el.shadowRoot) { shadowDomCount++; walk(el.shadowRoot, depth + 1); }
+      walk(el, depth + 1);
+    }
   }
-
-  walkDOM(document.body);
+  walk(document.body);
   result.shadowDomCount = shadowDomCount;
   result.customElements = customElements;
-  result.performance.domElements = allElements.length;
+  result.performance.domElements = domElements;
   result.performance.domDepth = maxDepth;
 
-  // Storage information
-  try {
-    result.storage = {
-      cookies: document.cookie ? document.cookie.split(';').filter(c => c.trim()).length : 0,
-      localStorage: localStorage ? Object.keys(localStorage).length : 0,
-      sessionStorage: sessionStorage ? Object.keys(sessionStorage).length : 0
-    };
-  } catch (e) {
-    result.storage = { cookies: 0, localStorage: 0, sessionStorage: 0 };
-  }
-
-  // Meta information
+  // Meta
   result.meta = {
     title: document.title,
     description: document.querySelector('meta[name="description"]')?.content || null,
-    keywords: document.querySelector('meta[name="keywords"]')?.content || null,
-    author: document.querySelector('meta[name="author"]')?.content || null,
     viewport: document.querySelector('meta[name="viewport"]')?.content || null,
-    charset: document.characterSet || document.querySelector('meta[charset]')?.getAttribute('charset'),
-    robots: document.querySelector('meta[name="robots"]')?.content || null,
+    charset: document.characterSet,
     canonical: document.querySelector('link[rel="canonical"]')?.href || null,
     language: document.documentElement.lang || null,
-    favicon: document.querySelector('link[rel="icon"], link[rel="shortcut icon"]')?.href || null,
-    themeColor: document.querySelector('meta[name="theme-color"]')?.content || null,
-    openGraph: [],
-    twitterCards: [],
-    structuredData: []
+    favicon: !!document.querySelector('link[rel="icon"], link[rel="shortcut icon"]'),
+    openGraph: Array.from(document.querySelectorAll('meta[property^="og:"]')).map(m => ({ property: m.getAttribute('property'), content: m.content })),
+    twitterCards: Array.from(document.querySelectorAll('meta[name^="twitter:"]')).map(m => ({ name: m.name, content: m.content }))
   };
 
-  document.querySelectorAll('meta[property^="og:"]').forEach(og => {
-    result.meta.openGraph.push({
-      property: og.getAttribute('property'),
-      content: og.content
-    });
-  });
-
-  document.querySelectorAll('meta[name^="twitter:"]').forEach(tc => {
-    result.meta.twitterCards.push({
-      name: tc.getAttribute('name'),
-      content: tc.content
-    });
-  });
-
-  document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
-    try {
-      result.meta.structuredData.push(JSON.parse(script.textContent));
-    } catch (e) {}
-  });
-
   // Forms
-  const forms = document.querySelectorAll('form');
-  forms.forEach((form, index) => {
-    const formData = {
-      index,
-      name: form.name || form.id || form.getAttribute('aria-label') || null,
-      action: form.action || null,
+  document.querySelectorAll('form').forEach((form, i) => {
+    const fields = [];
+    form.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(el => {
+      fields.push({
+        type: el.type || el.tagName.toLowerCase(),
+        name: el.name || null,
+        id: el.id || null,
+        required: el.required,
+        label: el.labels?.[0]?.textContent?.trim() || el.getAttribute('aria-label') || null
+      });
+      result.totalFields++;
+    });
+    result.forms.push({
+      name: form.name || form.id || null,
       method: (form.method || 'GET').toUpperCase(),
-      enctype: form.enctype || null,
-      target: form.target || null,
-      autocomplete: form.autocomplete || null,
-      novalidate: form.noValidate || false,
-      fields: []
-    };
-
-    const inputs = form.querySelectorAll('input, select, textarea, [contenteditable="true"], [role="textbox"], [role="combobox"]');
-    inputs.forEach(input => {
-      const field = extractFieldInfo(input);
-      if (field) {
-        formData.fields.push(field);
-        result.totalFields++;
-      }
-    });
-
-    result.forms.push(formData);
-  });
-
-  // Orphan inputs
-  const orphanInputs = document.querySelectorAll('input:not(form input), select:not(form select), textarea:not(form textarea), [contenteditable="true"]:not(form [contenteditable="true"])');
-  if (orphanInputs.length > 0) {
-    const orphanForm = {
-      index: result.forms.length,
-      name: 'Standalone Fields (no form)',
-      action: null,
-      method: null,
-      isOrphan: true,
-      fields: []
-    };
-
-    orphanInputs.forEach(input => {
-      const field = extractFieldInfo(input);
-      if (field) {
-        orphanForm.fields.push(field);
-        result.totalFields++;
-      }
-    });
-
-    if (orphanForm.fields.length > 0) {
-      result.forms.push(orphanForm);
-    }
-  }
-
-  function extractFieldInfo(element) {
-    const tagName = element.tagName.toLowerCase();
-    
-    if (tagName === 'input' && element.type === 'hidden') {
-      return null;
-    }
-
-    let type = 'text';
-    if (tagName === 'select') type = 'select';
-    else if (tagName === 'textarea') type = 'textarea';
-    else if (tagName === 'input') type = element.type || 'text';
-    else if (element.hasAttribute('contenteditable')) type = 'contenteditable';
-    else if (element.getAttribute('role') === 'textbox') type = 'textbox';
-    else if (element.getAttribute('role') === 'combobox') type = 'combobox';
-
-    const label = findLabel(element);
-
-    let options = null;
-    if (tagName === 'select') {
-      options = Array.from(element.options || []).slice(0, 20).map(opt => ({
-        value: opt.value,
-        text: opt.text,
-        selected: opt.selected
-      }));
-    }
-
-    return {
-      tag: tagName,
-      type,
-      name: element.name || null,
-      id: element.id || null,
-      label: label,
-      placeholder: element.placeholder || null,
-      required: element.required || element.getAttribute('aria-required') === 'true',
-      disabled: element.disabled || element.getAttribute('aria-disabled') === 'true',
-      readonly: element.readOnly || false,
-      pattern: element.pattern || null,
-      minLength: element.minLength > 0 ? element.minLength : null,
-      maxLength: element.maxLength > 0 && element.maxLength < 1000000 ? element.maxLength : null,
-      min: element.min || null,
-      max: element.max || null,
-      step: element.step || null,
-      autocomplete: element.autocomplete || null,
-      ariaLabel: element.getAttribute('aria-label') || null,
-      ariaDescribedBy: element.getAttribute('aria-describedby') || null,
-      className: element.className?.toString().substring(0, 100) || null,
-      value: element.value?.substring(0, 100) || null,
-      checked: element.type === 'checkbox' || element.type === 'radio' ? element.checked : null,
-      options: options
-    };
-  }
-
-  function findLabel(element) {
-    if (element.id) {
-      const label = document.querySelector(`label[for="${element.id}"]`);
-      if (label) return label.textContent.trim();
-    }
-
-    const parentLabel = element.closest('label');
-    if (parentLabel) {
-      const text = parentLabel.textContent.replace(element.value || '', '').trim();
-      if (text) return text;
-    }
-
-    const ariaLabel = element.getAttribute('aria-label');
-    if (ariaLabel) return ariaLabel;
-
-    const ariaLabelledBy = element.getAttribute('aria-labelledby');
-    if (ariaLabelledBy) {
-      const labelElement = document.getElementById(ariaLabelledBy);
-      if (labelElement) return labelElement.textContent.trim();
-    }
-
-    return null;
-  }
-
-  // Buttons
-  const buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"], input[type="reset"], [role="button"]');
-  buttons.forEach(btn => {
-    result.buttons.push({
-      text: btn.textContent?.trim() || btn.value || btn.getAttribute('aria-label') || '(no text)',
-      type: btn.type || 'button',
-      disabled: btn.disabled,
-      id: btn.id || null,
-      className: btn.className?.toString().substring(0, 50) || null
+      action: form.action || null,
+      fields
     });
   });
 
   // Links
   const links = document.querySelectorAll('a[href]');
-  const currentHost = window.location.hostname;
-  let internalLinks = 0, externalLinks = 0, anchorLinks = 0, telMailLinks = 0;
-  
-  result.links = Array.from(links).slice(0, 100).map(a => {
-    const href = a.href;
-    let linkType = 'internal';
-    
-    if (href.startsWith('#') || (href.includes('#') && href.includes(currentHost))) {
-      anchorLinks++;
-      linkType = 'anchor';
-    } else if (href.startsWith('tel:') || href.startsWith('mailto:')) {
-      telMailLinks++;
-      linkType = 'contact';
-    } else if (a.hostname && a.hostname !== currentHost) {
-      externalLinks++;
-      linkType = 'external';
-    } else {
-      internalLinks++;
-    }
-    
-    return {
-      text: (a.textContent?.trim() || '(no text)').substring(0, 80),
-      href: href,
-      type: linkType,
-      target: a.target || null,
-      rel: a.rel || null
-    };
-  });
   result.linksTotal = links.length;
-  result.navigation = {
-    navElements: document.querySelectorAll('nav').length,
-    menus: document.querySelectorAll('[role="menu"], [role="menubar"]').length,
-    internalLinks,
-    externalLinks,
-    anchorLinks,
-    telMailLinks,
-    breadcrumbs: document.querySelectorAll('[aria-label*="breadcrumb"], .breadcrumb, .breadcrumbs').length
-  };
+  const host = window.location.hostname;
+  let internal = 0, external = 0;
+  links.forEach(a => {
+    if (a.hostname && a.hostname !== host) external++;
+    else internal++;
+  });
+  result.navigation = { internalLinks: internal, externalLinks: external };
 
   // Headings
-  const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-  result.headings = Array.from(headings).map(h => ({
-    level: h.tagName,
-    text: h.textContent?.trim().substring(0, 150),
-    id: h.id || null
-  }));
-
-  // Media - Images
-  const images = document.querySelectorAll('img');
-  let imagesWithAlt = 0, imagesWithoutAlt = 0, imagesWithoutDimensions = 0;
-  result.media.images.items = Array.from(images).slice(0, 50).map(img => {
-    if (img.alt) imagesWithAlt++;
-    else imagesWithoutAlt++;
-    if (!img.width || !img.height) imagesWithoutDimensions++;
-    
-    return {
-      src: img.src?.substring(0, 200) || null,
-      alt: img.alt || null,
-      width: img.width || img.naturalWidth || null,
-      height: img.height || img.naturalHeight || null,
-      loading: img.loading || null,
-      srcset: img.srcset ? true : false
-    };
+  document.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
+    result.headings.push({ level: h.tagName, text: h.textContent?.trim().substring(0, 100), id: h.id || null });
   });
-  result.media.images.total = images.length;
-  result.media.images.withAlt = imagesWithAlt;
-  result.media.images.withoutAlt = imagesWithoutAlt;
-  result.performance.imagesWithoutDimensions = imagesWithoutDimensions;
 
-  // Media - Videos
-  const videos = document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"]');
-  result.media.videos.total = videos.length;
-  result.media.videos.items = Array.from(videos).slice(0, 20).map(v => ({
-    type: v.tagName.toLowerCase() === 'video' ? 'native' : 'embed',
-    src: v.src || v.querySelector('source')?.src || null,
-    poster: v.poster || null,
-    autoplay: v.autoplay || false,
-    controls: v.controls || false
-  }));
+  // Media
+  const images = document.querySelectorAll('img');
+  let withAlt = 0, withoutAlt = 0;
+  images.forEach(img => { if (img.alt) withAlt++; else withoutAlt++; });
+  result.media.images = { total: images.length, withAlt, withoutAlt };
+  result.media.videos.total = document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]').length;
+  result.media.audio.total = document.querySelectorAll('audio').length;
 
-  // Media - Audio
-  const audio = document.querySelectorAll('audio');
-  result.media.audio.total = audio.length;
-  result.media.audio.items = Array.from(audio).slice(0, 10).map(a => ({
-    src: a.src || a.querySelector('source')?.src || null,
-    controls: a.controls || false
-  }));
-
-  // Media - SVG & Canvas
-  result.media.svg.total = document.querySelectorAll('svg').length;
-  result.media.canvas = document.querySelectorAll('canvas').length;
-
-  // Tables
-  const tables = document.querySelectorAll('table');
-  result.tables.total = tables.length;
-  result.tables.items = Array.from(tables).slice(0, 10).map(table => ({
-    rows: table.rows?.length || 0,
-    columns: table.rows?.[0]?.cells?.length || 0,
-    hasHeader: !!table.querySelector('thead, th'),
-    caption: table.caption?.textContent?.trim() || null,
-    id: table.id || null
-  }));
-
-  // iFrames
-  const iframes = document.querySelectorAll('iframe');
-  result.iframes.total = iframes.length;
-  result.iframes.items = Array.from(iframes).slice(0, 20).map(iframe => ({
-    src: iframe.src || null,
-    title: iframe.title || null,
-    sandbox: iframe.sandbox?.value || null,
-    loading: iframe.loading || null,
-    allow: iframe.allow || null
-  }));
-
-  // Semantic elements
+  // Semantic
   result.semantic = {
     header: document.querySelectorAll('header').length,
     nav: document.querySelectorAll('nav').length,
     main: document.querySelectorAll('main').length,
+    footer: document.querySelectorAll('footer').length,
     article: document.querySelectorAll('article').length,
     section: document.querySelectorAll('section').length,
-    aside: document.querySelectorAll('aside').length,
-    footer: document.querySelectorAll('footer').length,
-    figure: document.querySelectorAll('figure').length,
-    figcaption: document.querySelectorAll('figcaption').length,
-    details: document.querySelectorAll('details').length,
-    summary: document.querySelectorAll('summary').length,
-    dialog: document.querySelectorAll('dialog').length,
-    time: document.querySelectorAll('time').length,
-    mark: document.querySelectorAll('mark').length,
-    address: document.querySelectorAll('address').length
+    aside: document.querySelectorAll('aside').length
   };
 
   // Scripts
   const scripts = document.querySelectorAll('script');
-  let externalScripts = 0, inlineScripts = 0, moduleScripts = 0, asyncScripts = 0, deferScripts = 0;
-  const scriptSources = [];
-  
-  scripts.forEach(script => {
-    if (script.src) {
-      externalScripts++;
-      scriptSources.push(script.src);
-    } else {
-      inlineScripts++;
-    }
-    if (script.type === 'module') moduleScripts++;
-    if (script.async) asyncScripts++;
-    if (script.defer) deferScripts++;
-  });
-  
-  result.scripts = {
-    total: scripts.length,
-    external: externalScripts,
-    inline: inlineScripts,
-    modules: moduleScripts,
-    async: asyncScripts,
-    defer: deferScripts,
-    sources: scriptSources.slice(0, 20)
-  };
+  let ext = 0, inl = 0;
+  scripts.forEach(s => { if (s.src) ext++; else inl++; });
+  result.scripts = { total: scripts.length, external: ext, inline: inl };
 
   // Stylesheets
-  const styleLinks = document.querySelectorAll('link[rel="stylesheet"]');
-  const inlineStyles = document.querySelectorAll('style');
   result.stylesheets = {
-    total: styleLinks.length + inlineStyles.length,
-    external: styleLinks.length,
-    inline: inlineStyles.length,
-    sources: Array.from(styleLinks).slice(0, 20).map(l => l.href)
+    total: document.querySelectorAll('link[rel="stylesheet"]').length + document.querySelectorAll('style').length,
+    external: document.querySelectorAll('link[rel="stylesheet"]').length,
+    inline: document.querySelectorAll('style').length
   };
-  result.performance.inlineStyles = document.querySelectorAll('[style]').length;
 
   // Accessibility
   result.accessibility = {
     ariaLabels: document.querySelectorAll('[aria-label]').length,
-    ariaDescribedBy: document.querySelectorAll('[aria-describedby]').length,
-    ariaLabelledBy: document.querySelectorAll('[aria-labelledby]').length,
     ariaRoles: document.querySelectorAll('[role]').length,
-    ariaHidden: document.querySelectorAll('[aria-hidden]').length,
-    ariaLive: document.querySelectorAll('[aria-live]').length,
-    ariaExpanded: document.querySelectorAll('[aria-expanded]').length,
     tabindex: document.querySelectorAll('[tabindex]').length,
     labels: document.querySelectorAll('label').length,
-    fieldsets: document.querySelectorAll('fieldset').length,
-    legends: document.querySelectorAll('legend').length,
-    skipLinks: document.querySelectorAll('a[href^="#main"], a[href^="#content"], .skip-link, .skip-to-content').length,
+    skipLinks: document.querySelectorAll('a[href^="#main"], a[href^="#content"], .skip-link').length,
     langAttribute: !!document.documentElement.lang,
-    altTextCoverage: images.length > 0 ? Math.round((imagesWithAlt / images.length) * 100) : 100
+    altTextCoverage: images.length > 0 ? Math.round((withAlt / images.length) * 100) : 100
   };
 
-  // Performance hints
-  const deprecatedElements = document.querySelectorAll('font, center, marquee, blink, spacer, frame, frameset, basefont, big, strike, tt');
-  result.performance.deprecatedElements = deprecatedElements.length;
+  // Performance
+  result.performance.inlineStyles = document.querySelectorAll('[style]').length;
+  result.performance.deprecatedElements = document.querySelectorAll('font, center, marquee, blink').length;
 
-  // Fonts
+  // Storage
   try {
-    const fontFaces = document.fonts ? Array.from(document.fonts) : [];
-    result.fonts = fontFaces.slice(0, 20).map(f => ({
-      family: f.family,
-      style: f.style,
-      weight: f.weight,
-      status: f.status
-    }));
-  } catch (e) {
-    result.fonts = [];
-  }
+    result.storage = {
+      cookies: document.cookie ? document.cookie.split(';').length : 0,
+      localStorage: Object.keys(localStorage).length,
+      sessionStorage: Object.keys(sessionStorage).length
+    };
+  } catch (e) {}
 
   return result;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  new PopupController();
-});
+function injectXray(types) {
+  const colors = {
+    forms: '#22c55e',
+    inputs: '#3b82f6',
+    buttons: '#eab308',
+    links: '#a855f7',
+    headings: '#ef4444',
+    images: '#f97316'
+  };
+  const selectors = {
+    forms: 'form',
+    inputs: 'input, select, textarea',
+    buttons: 'button, [type="submit"], [type="button"]',
+    links: 'a[href]',
+    headings: 'h1, h2, h3, h4, h5, h6',
+    images: 'img'
+  };
+
+  types.forEach(type => {
+    if (selectors[type]) {
+      document.querySelectorAll(selectors[type]).forEach(el => {
+        el.style.outline = `3px solid ${colors[type]}`;
+        el.style.backgroundColor = colors[type] + '20';
+        el.setAttribute('data-scanvui-xray', type);
+      });
+    }
+  });
+}
+
+function fillFormsWithData(locale, mode) {
+  const data = {
+    vi: {
+      name: ['Nguyễn Văn A', 'Trần Thị B', 'Lê Văn C'],
+      email: ['test@example.com', 'user@mail.vn'],
+      phone: ['0901234567', '0912345678'],
+      address: ['123 Đường ABC, Quận 1, TP.HCM'],
+      text: ['Đây là nội dung test']
+    },
+    en: {
+      name: ['John Doe', 'Jane Smith'],
+      email: ['john@example.com', 'test@mail.com'],
+      phone: ['555-1234', '555-5678'],
+      address: ['123 Main St, City'],
+      text: ['This is test content']
+    }
+  };
+  const d = data[locale] || data.vi;
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  document.querySelectorAll('input, textarea, select').forEach(el => {
+    if (el.type === 'hidden' || el.disabled || el.readOnly) return;
+    
+    const name = (el.name || el.id || '').toLowerCase();
+    
+    if (el.type === 'email' || name.includes('email')) el.value = pick(d.email);
+    else if (el.type === 'tel' || name.includes('phone') || name.includes('tel')) el.value = pick(d.phone);
+    else if (name.includes('name')) el.value = pick(d.name);
+    else if (name.includes('address')) el.value = pick(d.address);
+    else if (el.type === 'checkbox') el.checked = Math.random() > 0.5;
+    else if (el.type === 'radio') el.checked = Math.random() > 0.7;
+    else if (el.tagName === 'SELECT' && el.options.length > 1) el.selectedIndex = 1;
+    else if (el.type === 'text' || el.tagName === 'TEXTAREA') el.value = pick(d.text);
+    else if (el.type === 'number') el.value = Math.floor(Math.random() * 100);
+    else if (el.type === 'date') el.value = new Date().toISOString().slice(0, 10);
+  });
+}
+
+function startPicker() {
+  if (document.getElementById('scanvui-picker-overlay')) return;
+  
+  const overlay = document.createElement('div');
+  overlay.id = 'scanvui-picker-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;cursor:crosshair;';
+  
+  const tooltip = document.createElement('div');
+  tooltip.id = 'scanvui-picker-tooltip';
+  tooltip.style.cssText = 'position:fixed;background:#1a1a2e;color:white;padding:8px 12px;border-radius:6px;font-size:12px;font-family:monospace;z-index:1000000;pointer-events:none;max-width:300px;word-break:break-all;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+  document.body.appendChild(tooltip);
+  
+  let highlight = null;
+  let lastSelectors = null;
+  
+  function getSelectors(el) {
+    // CSS Selector
+    let css = '';
+    if (el.id) {
+      css = '#' + el.id;
+    } else if (el.className && typeof el.className === 'string') {
+      const classes = el.className.trim().split(/\s+/).filter(c => c && !c.startsWith('scanvui'));
+      if (classes.length > 0) {
+        css = el.tagName.toLowerCase() + '.' + classes[0];
+      } else {
+        css = el.tagName.toLowerCase();
+      }
+    } else {
+      css = el.tagName.toLowerCase();
+    }
+    
+    // XPath - simple but accurate
+    let xpath = '';
+    if (el.id) {
+      xpath = `//*[@id="${el.id}"]`;
+    } else {
+      const parts = [];
+      let current = el;
+      while (current && current.nodeType === 1 && current !== document.body) {
+        let selector = current.tagName.toLowerCase();
+        const siblings = current.parentNode ? Array.from(current.parentNode.children).filter(c => c.tagName === current.tagName) : [];
+        if (siblings.length > 1) {
+          const index = siblings.indexOf(current) + 1;
+          selector += `[${index}]`;
+        }
+        parts.unshift(selector);
+        current = current.parentElement;
+      }
+      xpath = '//' + parts.join('/');
+    }
+    
+    // Playwright selector
+    let playwright = '';
+    if (el.getAttribute('data-testid')) {
+      playwright = `[data-testid="${el.getAttribute('data-testid')}"]`;
+    } else if (el.getAttribute('aria-label')) {
+      playwright = `getByLabel("${el.getAttribute('aria-label')}")`;
+    } else if (el.textContent && el.textContent.trim().length > 0 && el.textContent.trim().length < 50 && el.children.length === 0) {
+      playwright = `getByText("${el.textContent.trim().substring(0, 30)}")`;
+    } else {
+      playwright = css;
+    }
+    
+    return { css, xpath, playwright };
+  }
+  
+  overlay.addEventListener('mousemove', e => {
+    overlay.style.pointerEvents = 'none';
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    overlay.style.pointerEvents = 'auto';
+    
+    if (el && el !== overlay && el !== tooltip && el !== highlight) {
+      if (highlight) {
+        highlight.style.outline = highlight._originalOutline || '';
+      }
+      highlight = el;
+      highlight._originalOutline = highlight.style.outline;
+      highlight.style.outline = '3px solid #6366f1';
+      
+      lastSelectors = getSelectors(el);
+      tooltip.innerHTML = `<strong>${el.tagName.toLowerCase()}</strong>${el.id ? '#' + el.id : ''}<br>CSS: ${lastSelectors.css}`;
+      tooltip.style.display = 'block';
+    }
+    
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY + 15) + 'px';
+  });
+  
+  overlay.addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (highlight && lastSelectors) {
+      highlight.style.outline = highlight._originalOutline || '';
+      
+      window.postMessage({ 
+        type: 'SCANVUI_SELECTOR_PICKED', 
+        selectors: lastSelectors 
+      }, '*');
+      
+      navigator.clipboard.writeText(lastSelectors.css).then(() => {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#10b981;color:white;padding:10px 20px;border-radius:8px;font-size:13px;z-index:1000001;';
+        toast.textContent = 'Đã copy: ' + lastSelectors.css;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+      });
+    }
+    
+    overlay.remove();
+    tooltip.remove();
+  });
+  
+  overlay.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (highlight) highlight.style.outline = highlight._originalOutline || '';
+      overlay.remove();
+      tooltip.remove();
+    }
+  });
+  
+  overlay.setAttribute('tabindex', '0');
+  document.body.appendChild(overlay);
+  overlay.focus();
+}
+
+function detectTechnologies() {
+  const techs = [];
+  
+  // Frameworks
+  if (window.React || document.querySelector('[data-reactroot]') || document.querySelector('[data-react-helmet]')) {
+    techs.push({ icon: '⚛️', name: 'React' });
+  }
+  if (window.Vue || document.querySelector('[data-v-]') || window.__VUE__) {
+    techs.push({ icon: '💚', name: 'Vue' });
+  }
+  if (window.angular || document.querySelector('[ng-app]') || document.querySelector('[ng-version]')) {
+    techs.push({ icon: '🅰️', name: 'Angular' });
+  }
+  if (window.Svelte || document.querySelector('[class*="svelte"]')) {
+    techs.push({ icon: '🔶', name: 'Svelte' });
+  }
+  if (window.next || document.querySelector('#__next') || window.__NEXT_DATA__) {
+    techs.push({ icon: '▲', name: 'Next.js' });
+  }
+  if (window.nuxt || document.querySelector('#__nuxt') || window.__NUXT__) {
+    techs.push({ icon: '💚', name: 'Nuxt' });
+  }
+  if (window.__GATSBY) {
+    techs.push({ icon: '💜', name: 'Gatsby' });
+  }
+  if (document.querySelector('[data-astro-cid]') || document.querySelector('astro-island')) {
+    techs.push({ icon: '🚀', name: 'Astro' });
+  }
+  
+  // Libraries
+  if (window.jQuery || window.$?.fn?.jquery) {
+    techs.push({ icon: '📦', name: 'jQuery' });
+  }
+  if (window.htmx) {
+    techs.push({ icon: '⚡', name: 'htmx' });
+  }
+  if (window.Alpine) {
+    techs.push({ icon: '🏔️', name: 'Alpine.js' });
+  }
+  
+  // CSS Frameworks - improved detection
+  const allClasses = Array.from(document.querySelectorAll('[class]')).map(el => el.className).join(' ');
+  if (allClasses.includes('tw-') || document.querySelector('[class*="sm:"]') || document.querySelector('[class*="md:"]') || document.querySelector('[class*="lg:"]')) {
+    techs.push({ icon: '🎨', name: 'Tailwind' });
+  }
+  if (document.querySelector('.btn-primary') || document.querySelector('.navbar-brand') || document.querySelector('[class*="col-md-"]') || document.querySelector('[class*="col-lg-"]')) {
+    techs.push({ icon: '🅱️', name: 'Bootstrap' });
+  }
+  if (document.querySelector('.ui.button') || document.querySelector('.ui.container')) {
+    techs.push({ icon: '🎨', name: 'Semantic UI' });
+  }
+  if (document.querySelector('[class*="MuiButton"]') || document.querySelector('[class*="MuiPaper"]')) {
+    techs.push({ icon: '🎨', name: 'MUI' });
+  }
+  if (document.querySelector('[class*="chakra-"]')) {
+    techs.push({ icon: '⚡', name: 'Chakra UI' });
+  }
+  if (document.querySelector('[class*="ant-"]')) {
+    techs.push({ icon: '🐜', name: 'Ant Design' });
+  }
+  
+  // Build tools
+  if (document.querySelector('script[src*="@vite"]') || document.querySelector('script[type="module"][src*="/@"]')) {
+    techs.push({ icon: '⚡', name: 'Vite' });
+  }
+  
+  // Analytics
+  if (window.gtag || window.ga || window.dataLayer) {
+    techs.push({ icon: '📊', name: 'GA' });
+  }
+  if (window.fbq) {
+    techs.push({ icon: '📘', name: 'FB Pixel' });
+  }
+  if (window.analytics || window.segment) {
+    techs.push({ icon: '📈', name: 'Segment' });
+  }
+  if (window.mixpanel) {
+    techs.push({ icon: '📊', name: 'Mixpanel' });
+  }
+  if (window.amplitude) {
+    techs.push({ icon: '📊', name: 'Amplitude' });
+  }
+  if (window.posthog) {
+    techs.push({ icon: '🦔', name: 'PostHog' });
+  }
+  
+  // CMS
+  if (document.querySelector('meta[name="generator"][content*="WordPress"]') || document.querySelector('link[href*="wp-content"]')) {
+    techs.push({ icon: '📝', name: 'WordPress' });
+  }
+  if (document.querySelector('meta[name="generator"][content*="Shopify"]') || window.Shopify) {
+    techs.push({ icon: '🛒', name: 'Shopify' });
+  }
+  if (document.querySelector('meta[name="generator"][content*="Webflow"]')) {
+    techs.push({ icon: '🌐', name: 'Webflow' });
+  }
+  if (document.querySelector('meta[name="generator"][content*="Wix"]') || window.wixBiSession) {
+    techs.push({ icon: '🎨', name: 'Wix' });
+  }
+  if (document.querySelector('meta[name="generator"][content*="Squarespace"]')) {
+    techs.push({ icon: '◼️', name: 'Squarespace' });
+  }
+  
+  return techs;
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => new ScanVuiApp());
