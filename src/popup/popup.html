@@ -19,7 +19,7 @@
           <span class="icon-light">☀️</span>
           <span class="icon-dark">🌙</span>
         </button>
-        <span class="version">v3.1</span>
+        <span class="version">v3.3</span>
       </div>
     </header>
 
@@ -30,6 +30,26 @@
         <span class="scan-text">Quét trang</span>
       </button>
       <div id="pageInfo" class="page-info"></div>
+    </div>
+
+    <!-- Quick Actions Bar (always visible) -->
+    <div class="quick-actions-bar">
+      <button class="quick-action-btn" data-quick="screenshot" title="Chụp ảnh trang">
+        <span class="qa-icon">📸</span>
+        <span class="qa-label">Chụp</span>
+      </button>
+      <button class="quick-action-btn" data-quick="crawler" title="Tải website offline">
+        <span class="qa-icon">🌐</span>
+        <span class="qa-label">Tải web</span>
+      </button>
+      <button class="quick-action-btn" data-quick="media" title="Quét media">
+        <span class="qa-icon">🖼️</span>
+        <span class="qa-label">Media</span>
+      </button>
+      <button class="quick-action-btn" data-quick="selector" title="Copy selector">
+        <span class="qa-icon">🎯</span>
+        <span class="qa-label">Selector</span>
+      </button>
     </div>
 
     <!-- Loading State -->
@@ -107,140 +127,286 @@
 
       <!-- Tools Tab -->
       <div id="toolsTab" class="tab-panel">
-        <div class="tools-grid">
-          <!-- X-Ray Vision -->
-          <div class="tool-card" data-tool="xray">
-            <div class="tool-header">
-              <span class="tool-icon">👁️</span>
-              <span class="tool-name">X-Ray Vision</span>
-            </div>
-            <p class="tool-desc">Highlight elements trên trang theo loại</p>
-            <div class="tool-options xray-options">
-              <label><input type="checkbox" data-xray="forms" checked> Forms</label>
-              <label><input type="checkbox" data-xray="inputs" checked> Inputs</label>
-              <label><input type="checkbox" data-xray="buttons" checked> Buttons</label>
-              <label><input type="checkbox" data-xray="links"> Links</label>
-              <label><input type="checkbox" data-xray="headings"> Headings</label>
-              <label><input type="checkbox" data-xray="images"> Images</label>
-            </div>
-            <div class="tool-actions">
-              <button class="tool-btn primary" id="xrayApply" aria-label="Bật X-Ray Vision">Bật X-Ray</button>
-              <button class="tool-btn" id="xrayClear" aria-label="Tắt X-Ray Vision">Tắt</button>
-            </div>
-          </div>
+        <!-- Tools Sub-tabs -->
+        <div class="tools-subtabs">
+          <button class="subtab-btn active" data-subtab="popular">⭐ Phổ biến</button>
+          <button class="subtab-btn" data-subtab="dev">🛠️ Dev</button>
+          <button class="subtab-btn" data-subtab="testing">🧪 Testing</button>
+        </div>
 
-          <!-- Form Filler -->
-          <div class="tool-card" data-tool="formfiller">
-            <div class="tool-header">
-              <span class="tool-icon">🧪</span>
-              <span class="tool-name">Form Filler</span>
-            </div>
-            <p class="tool-desc">Tự động điền form với dữ liệu test</p>
-            <div class="tool-options">
-              <select id="fillLocale">
-                <option value="vi">Tiếng Việt</option>
-                <option value="en">English</option>
-              </select>
-              <select id="fillMode">
-                <option value="realistic">Thực tế</option>
-                <option value="random">Ngẫu nhiên</option>
-                <option value="edge">Edge cases</option>
-              </select>
-            </div>
-            <div class="tool-actions">
-              <button class="tool-btn primary" id="fillForms">Điền form</button>
-              <button class="tool-btn" id="clearForms">Xóa</button>
-            </div>
-          </div>
-
-          <!-- Selector Picker -->
-          <div class="tool-card" data-tool="selector">
-            <div class="tool-header">
-              <span class="tool-icon">🎯</span>
-              <span class="tool-name">Copy Selector</span>
-            </div>
-            <p class="tool-desc">Lấy CSS/XPath/Playwright selector</p>
-            <div id="selectorResult" class="selector-result hidden">
-              <div class="selector-row">
-                <span class="selector-label">CSS:</span>
-                <code id="cssSelector">-</code>
-                <button class="copy-mini" data-copy="css" aria-label="Copy CSS selector">📋</button>
+        <!-- Popular Tools (Screenshot, Crawler, Media) -->
+        <div class="tools-subtab-content active" data-subtab-content="popular">
+          <div class="tools-grid">
+            <!-- Screenshot Tool -->
+            <div class="tool-card" data-tool="screenshot">
+              <div class="tool-header">
+                <span class="tool-icon">📸</span>
+                <span class="tool-name">Chụp ảnh trang</span>
               </div>
-              <div class="selector-row">
-                <span class="selector-label">XPath:</span>
-                <code id="xpathSelector">-</code>
-                <button class="copy-mini" data-copy="xpath" aria-label="Copy XPath">📋</button>
+              <p class="tool-desc">Chụp toàn bộ hoặc phần hiển thị của trang web</p>
+              
+              <div class="screenshot-options">
+                <div class="option-group">
+                  <label class="option-label">Chế độ:</label>
+                  <div class="screenshot-modes">
+                    <button class="mode-btn active" data-mode="full" title="Chụp toàn bộ trang">📄 Toàn trang</button>
+                    <button class="mode-btn" data-mode="visible" title="Chụp phần đang hiển thị">👁️ Visible</button>
+                  </div>
+                </div>
+                
+                <div class="option-group">
+                  <label class="option-label">Định dạng:</label>
+                  <div class="format-options">
+                    <label class="format-radio">
+                      <input type="radio" name="screenshotFormat" value="png" checked>
+                      <span>PNG</span>
+                    </label>
+                    <label class="format-radio">
+                      <input type="radio" name="screenshotFormat" value="jpeg">
+                      <span>JPEG</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="option-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="hideFixedElements" checked>
+                    <span>Ẩn header/footer cố định</span>
+                  </label>
+                </div>
               </div>
-              <div class="selector-row">
-                <span class="selector-label">Playwright:</span>
-                <code id="playwrightSelector">-</code>
-                <button class="copy-mini" data-copy="playwright" aria-label="Copy Playwright selector">📋</button>
+              
+              <div id="screenshotProgress" class="screenshot-progress hidden">
+                <div class="progress-text">
+                  <span id="progressLabel">Đang chụp...</span>
+                  <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar">
+                  <div id="progressFill" class="progress-fill"></div>
+                </div>
+              </div>
+              
+              <div id="screenshotPreview" class="screenshot-preview hidden">
+                <img id="previewImage" alt="Preview">
+                <div class="preview-info">
+                  <span id="previewSize"></span>
+                </div>
+              </div>
+              
+              <div class="tool-actions">
+                <button class="tool-btn primary" id="captureScreenshot">📸 Chụp ảnh</button>
+                <button class="tool-btn" id="downloadScreenshot" disabled>💾 Tải về</button>
+                <button class="tool-btn" id="copyScreenshot" disabled>📋 Copy</button>
               </div>
             </div>
-            <div class="tool-actions">
-              <button class="tool-btn primary" id="pickElement" aria-label="Chọn element từ trang">Chọn element</button>
+
+            <!-- Website Crawler -->
+            <div class="tool-card tool-card-large" data-tool="crawler">
+              <div class="tool-header">
+                <span class="tool-icon">🌐</span>
+                <span class="tool-name">Tải Website Offline</span>
+              </div>
+              <p class="tool-desc">Tải toàn bộ website về thư mục Downloads</p>
+              
+              <div class="crawler-simple-settings">
+                <div class="crawler-setting-row">
+                  <label>Độ sâu (level):</label>
+                  <select id="crawlerDepth" class="crawler-select">
+                    <option value="1">1 - Chỉ trang hiện tại + links trực tiếp</option>
+                    <option value="2" selected>2 - Trang con + trang cháu</option>
+                    <option value="3">3 - Sâu hơn</option>
+                    <option value="5">5 - Rất sâu</option>
+                    <option value="0">∞ - Không giới hạn</option>
+                  </select>
+                </div>
+                <div class="crawler-setting-row">
+                  <label>Số trang tối đa:</label>
+                  <select id="crawlerMaxPages" class="crawler-select">
+                    <option value="20">20 trang</option>
+                    <option value="50" selected>50 trang</option>
+                    <option value="100">100 trang</option>
+                    <option value="500">500 trang</option>
+                    <option value="1000">1000 trang</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div id="crawlerProgress" class="crawler-progress hidden">
+                <div class="crawler-progress-header">
+                  <span id="crawlerProgressLabel">Đang chuẩn bị...</span>
+                  <span id="crawlerProgressPercent">0%</span>
+                </div>
+                <div class="crawler-progress-bar">
+                  <div id="crawlerProgressFill" class="crawler-progress-fill"></div>
+                </div>
+                <div class="crawler-stats">
+                  <span>📄 <span id="crawlerPagesCount">0</span> trang</span>
+                  <span>🖼️ <span id="crawlerImagesCount">0</span> ảnh</span>
+                </div>
+                <div id="crawlerCurrentUrl" class="crawler-current-url"></div>
+              </div>
+              
+              <div id="crawlerResult" class="crawler-result hidden">
+                <div class="crawler-result-summary">
+                  <span>✅ Hoàn thành!</span>
+                  <span id="crawlerResultInfo"></span>
+                </div>
+                <div class="crawler-result-path">
+                  📁 Đã lưu vào: <strong>Downloads/<span id="crawlerFolderName"></span>/</strong>
+                </div>
+                <button class="tool-btn" id="redownloadCrawler" style="margin-top: 8px; width: 100%;">📥 Tải lại files (nếu thiếu)</button>
+              </div>
+              
+              <div class="tool-actions">
+                <button class="tool-btn primary" id="startCrawler">🌐 Bắt đầu tải</button>
+                <button class="tool-btn" id="stopCrawler" disabled>⏹️ Dừng</button>
+              </div>
+            </div>
+
+            <!-- Media Scanner -->
+            <div class="tool-card" data-tool="media">
+              <div class="tool-header">
+                <span class="tool-icon">🖼️</span>
+                <span class="tool-name">Media Scanner</span>
+              </div>
+              <p class="tool-desc">Tìm và tải hình ảnh, video</p>
+              <div id="mediaSummary" class="media-summary"></div>
+              <div id="mediaList" class="media-list"></div>
+              <div class="tool-actions">
+                <button class="tool-btn primary" id="scanMedia">Quét media</button>
+                <button class="tool-btn" id="downloadAllMedia" disabled>Tải tất cả</button>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Responsive Test -->
-          <div class="tool-card" data-tool="responsive">
-            <div class="tool-header">
-              <span class="tool-icon">📱</span>
-              <span class="tool-name">Responsive</span>
+        <!-- Dev Tools (Selector, Tech Stack, X-Ray) -->
+        <div class="tools-subtab-content" data-subtab-content="dev">
+          <div class="tools-grid">
+            <!-- Selector Picker -->
+            <div class="tool-card" data-tool="selector">
+              <div class="tool-header">
+                <span class="tool-icon">🎯</span>
+                <span class="tool-name">Copy Selector</span>
+              </div>
+              <p class="tool-desc">Lấy CSS/XPath/Playwright selector</p>
+              <div id="selectorResult" class="selector-result hidden">
+                <div class="selector-row">
+                  <span class="selector-label">CSS:</span>
+                  <code id="cssSelector">-</code>
+                  <button class="copy-mini" data-copy="css" aria-label="Copy CSS selector">📋</button>
+                </div>
+                <div class="selector-row">
+                  <span class="selector-label">XPath:</span>
+                  <code id="xpathSelector">-</code>
+                  <button class="copy-mini" data-copy="xpath" aria-label="Copy XPath">📋</button>
+                </div>
+                <div class="selector-row">
+                  <span class="selector-label">Playwright:</span>
+                  <code id="playwrightSelector">-</code>
+                  <button class="copy-mini" data-copy="playwright" aria-label="Copy Playwright selector">📋</button>
+                </div>
+              </div>
+              <div class="tool-actions">
+                <button class="tool-btn primary" id="pickElement" aria-label="Chọn element từ trang">Chọn element</button>
+              </div>
             </div>
-            <p class="tool-desc">Test với các kích thước màn hình</p>
-            <div class="viewport-buttons">
-              <button class="viewport-btn" data-w="375" data-h="667">iPhone SE</button>
-              <button class="viewport-btn" data-w="390" data-h="844">iPhone 14</button>
-              <button class="viewport-btn" data-w="768" data-h="1024">iPad</button>
-              <button class="viewport-btn" data-w="1920" data-h="1080">Desktop</button>
+
+            <!-- Tech Stack -->
+            <div class="tool-card" data-tool="techstack">
+              <div class="tool-header">
+                <span class="tool-icon">⚙️</span>
+                <span class="tool-name">Tech Stack</span>
+              </div>
+              <p class="tool-desc">Phát hiện frameworks & thư viện</p>
+              <div id="techStackResult" class="techstack-result"></div>
+              <div class="tool-actions">
+                <button class="tool-btn primary" id="detectTech">Phát hiện</button>
+              </div>
+            </div>
+
+            <!-- X-Ray Vision -->
+            <div class="tool-card" data-tool="xray">
+              <div class="tool-header">
+                <span class="tool-icon">👁️</span>
+                <span class="tool-name">X-Ray Vision</span>
+              </div>
+              <p class="tool-desc">Highlight elements trên trang theo loại</p>
+              <div class="tool-options xray-options">
+                <label><input type="checkbox" data-xray="forms" checked> Forms</label>
+                <label><input type="checkbox" data-xray="inputs" checked> Inputs</label>
+                <label><input type="checkbox" data-xray="buttons" checked> Buttons</label>
+                <label><input type="checkbox" data-xray="links"> Links</label>
+                <label><input type="checkbox" data-xray="headings"> Headings</label>
+                <label><input type="checkbox" data-xray="images"> Images</label>
+              </div>
+              <div class="tool-actions">
+                <button class="tool-btn primary" id="xrayApply" aria-label="Bật X-Ray Vision">Bật X-Ray</button>
+                <button class="tool-btn" id="xrayClear" aria-label="Tắt X-Ray Vision">Tắt</button>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- A11y Simulator -->
-          <div class="tool-card" data-tool="a11y">
-            <div class="tool-header">
-              <span class="tool-icon">♿</span>
-              <span class="tool-name">A11y Simulator</span>
+        <!-- Testing Tools (Form Filler, Responsive, A11y) -->
+        <div class="tools-subtab-content" data-subtab-content="testing">
+          <div class="tools-grid">
+            <!-- Form Filler -->
+            <div class="tool-card" data-tool="formfiller">
+              <div class="tool-header">
+                <span class="tool-icon">🧪</span>
+                <span class="tool-name">Form Filler</span>
+              </div>
+              <p class="tool-desc">Tự động điền form với dữ liệu test</p>
+              <div class="tool-options">
+                <select id="fillLocale">
+                  <option value="vi">Tiếng Việt</option>
+                  <option value="en">English</option>
+                </select>
+                <select id="fillMode">
+                  <option value="realistic">Thực tế</option>
+                  <option value="random">Ngẫu nhiên</option>
+                  <option value="edge">Edge cases</option>
+                </select>
+              </div>
+              <div class="tool-actions">
+                <button class="tool-btn primary" id="fillForms">Điền form</button>
+                <button class="tool-btn" id="clearForms">Xóa</button>
+              </div>
             </div>
-            <p class="tool-desc">Mô phỏng các dạng khiếm thị</p>
-            <div class="sim-buttons">
-              <button class="sim-btn" data-sim="protanopia">🔴 Mù đỏ</button>
-              <button class="sim-btn" data-sim="deuteranopia">🟢 Mù xanh lá</button>
-              <button class="sim-btn" data-sim="tritanopia">🔵 Mù xanh</button>
-              <button class="sim-btn" data-sim="achromatopsia">⚫ Mù màu</button>
-              <button class="sim-btn" data-sim="blurry">👓 Mờ</button>
-            </div>
-            <div class="tool-actions">
-              <button class="tool-btn" id="resetA11y">Khôi phục</button>
-            </div>
-          </div>
 
-          <!-- Tech Stack -->
-          <div class="tool-card" data-tool="techstack">
-            <div class="tool-header">
-              <span class="tool-icon">⚙️</span>
-              <span class="tool-name">Tech Stack</span>
+            <!-- Responsive Test -->
+            <div class="tool-card" data-tool="responsive">
+              <div class="tool-header">
+                <span class="tool-icon">📱</span>
+                <span class="tool-name">Responsive</span>
+              </div>
+              <p class="tool-desc">Test với các kích thước màn hình</p>
+              <div class="viewport-buttons">
+                <button class="viewport-btn" data-w="375" data-h="667">iPhone SE</button>
+                <button class="viewport-btn" data-w="390" data-h="844">iPhone 14</button>
+                <button class="viewport-btn" data-w="768" data-h="1024">iPad</button>
+                <button class="viewport-btn" data-w="1920" data-h="1080">Desktop</button>
+              </div>
             </div>
-            <p class="tool-desc">Phát hiện frameworks & thư viện</p>
-            <div id="techStackResult" class="techstack-result"></div>
-            <div class="tool-actions">
-              <button class="tool-btn primary" id="detectTech">Phát hiện</button>
-            </div>
-          </div>
 
-          <!-- Media Scanner -->
-          <div class="tool-card" data-tool="media">
-            <div class="tool-header">
-              <span class="tool-icon">🖼️</span>
-              <span class="tool-name">Media Scanner</span>
-            </div>
-            <p class="tool-desc">Tìm và tải hình ảnh, video</p>
-            <div id="mediaSummary" class="media-summary"></div>
-            <div id="mediaList" class="media-list"></div>
-            <div class="tool-actions">
-              <button class="tool-btn primary" id="scanMedia">Quét media</button>
-              <button class="tool-btn" id="downloadAllMedia" disabled>Tải tất cả</button>
+            <!-- A11y Simulator -->
+            <div class="tool-card" data-tool="a11y">
+              <div class="tool-header">
+                <span class="tool-icon">♿</span>
+                <span class="tool-name">A11y Simulator</span>
+              </div>
+              <p class="tool-desc">Mô phỏng các dạng khiếm thị</p>
+              <div class="sim-buttons">
+                <button class="sim-btn" data-sim="protanopia">🔴 Mù đỏ</button>
+                <button class="sim-btn" data-sim="deuteranopia">🟢 Mù xanh lá</button>
+                <button class="sim-btn" data-sim="tritanopia">🔵 Mù xanh</button>
+                <button class="sim-btn" data-sim="achromatopsia">⚫ Mù màu</button>
+                <button class="sim-btn" data-sim="blurry">👓 Mờ</button>
+              </div>
+              <div class="tool-actions">
+                <button class="tool-btn" id="resetA11y">Khôi phục</button>
+              </div>
             </div>
           </div>
         </div>

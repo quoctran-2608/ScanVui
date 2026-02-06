@@ -9,6 +9,14 @@ class ScanVuiApp {
     this.currentTab = 'results';
     this.mediaData = null;
     this.currentMediaTab = 'images';
+    this.screenshotData = null;
+    this.screenshotMode = 'full';
+    this.isCapturing = false;
+    
+    // Website Crawler properties
+    this.crawlerPollInterval = null;
+    this.toastTimeout = null;
+    
     this.init();
   }
 
@@ -18,6 +26,7 @@ class ScanVuiApp {
     this.initTheme();
     this.loadLastScan();
     this.showPageInfo();
+    this.checkCrawlerOnLoad();
   }
 
   bindElements() {
@@ -57,6 +66,20 @@ class ScanVuiApp {
     this.copyJSON = document.getElementById('copyJSON');
     this.copyMarkdown = document.getElementById('copyMarkdown');
     this.copySummary = document.getElementById('copySummary');
+
+    // Screenshot
+    this.captureScreenshotBtn = document.getElementById('captureScreenshot');
+    this.downloadScreenshotBtn = document.getElementById('downloadScreenshot');
+    this.copyScreenshotBtn = document.getElementById('copyScreenshot');
+    this.screenshotProgress = document.getElementById('screenshotProgress');
+    this.progressLabel = document.getElementById('progressLabel');
+    this.progressPercent = document.getElementById('progressPercent');
+    this.progressFill = document.getElementById('progressFill');
+    this.screenshotPreview = document.getElementById('screenshotPreview');
+    this.previewImage = document.getElementById('previewImage');
+    this.previewSize = document.getElementById('previewSize');
+
+    // Crawler (uses getElementById directly in methods)
   }
 
   bindEvents() {
@@ -117,6 +140,35 @@ class ScanVuiApp {
     this.copyJSON?.addEventListener('click', () => this.copyAsJSON());
     this.copyMarkdown?.addEventListener('click', () => this.copyAsMarkdown());
     this.copySummary?.addEventListener('click', () => this.copyAsSummary());
+
+    // Screenshot mode buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.screenshotMode = btn.dataset.mode;
+      });
+    });
+
+    // Screenshot buttons
+    this.captureScreenshotBtn?.addEventListener('click', () => this.captureScreenshot());
+    this.downloadScreenshotBtn?.addEventListener('click', () => this.downloadScreenshot());
+    this.copyScreenshotBtn?.addEventListener('click', () => this.copyScreenshotToClipboard());
+
+    // Crawler buttons
+    document.getElementById('startCrawler')?.addEventListener('click', () => this.startCrawler());
+    document.getElementById('stopCrawler')?.addEventListener('click', () => this.stopCrawler());
+    document.getElementById('redownloadCrawler')?.addEventListener('click', () => this.redownloadFromPopup());
+
+    // Quick Actions Bar
+    document.querySelectorAll('.quick-action-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.handleQuickAction(btn.dataset.quick));
+    });
+
+    // Tools Sub-tabs
+    document.querySelectorAll('.subtab-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.switchSubtab(btn.dataset.subtab));
+    });
   }
 
   // ============================================
@@ -153,6 +205,11 @@ class ScanVuiApp {
   switchTab(tabId) {
     this.currentTab = tabId;
     
+    // If switching to results tab without scan data, show a message
+    if (tabId === 'results' && !this.scanData) {
+      this.showToast('Nhấn "Quét trang" để xem kết quả phân tích');
+    }
+    
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === tabId);
     });
@@ -160,6 +217,56 @@ class ScanVuiApp {
     document.querySelectorAll('.tab-panel').forEach(panel => {
       panel.classList.toggle('active', panel.id === tabId + 'Tab');
     });
+  }
+
+  // Switch tools sub-tab
+  switchSubtab(subtabId) {
+    document.querySelectorAll('.subtab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.subtab === subtabId);
+    });
+    
+    document.querySelectorAll('.tools-subtab-content').forEach(content => {
+      content.classList.toggle('active', content.dataset.subtabContent === subtabId);
+    });
+  }
+
+  // Handle quick action buttons
+  handleQuickAction(action) {
+    // Hide welcome screen if visible
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    if (welcomeScreen) {
+      welcomeScreen.classList.add('hidden');
+    }
+    
+    // Show tab navigation and content (even without scan data)
+    this.tabNav?.classList.remove('hidden');
+    this.tabContent?.classList.remove('hidden');
+    
+    // Switch to tools tab
+    this.switchTab('tools');
+    
+    // Map action to subtab and tool
+    const actionMap = {
+      'screenshot': { subtab: 'popular', tool: 'screenshot' },
+      'crawler': { subtab: 'popular', tool: 'crawler' },
+      'media': { subtab: 'popular', tool: 'media' },
+      'selector': { subtab: 'dev', tool: 'selector' }
+    };
+    
+    const config = actionMap[action];
+    if (config) {
+      this.switchSubtab(config.subtab);
+      
+      // Scroll to the tool and highlight it briefly
+      setTimeout(() => {
+        const toolCard = document.querySelector(`.tool-card[data-tool="${config.tool}"]`);
+        if (toolCard) {
+          toolCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          toolCard.classList.add('highlight');
+          setTimeout(() => toolCard.classList.remove('highlight'), 1500);
+        }
+      }, 100);
+    }
   }
 
   // ============================================
@@ -857,6 +964,674 @@ class ScanVuiApp {
   }
 
   // ============================================
+  // SCREENSHOT
+  // ============================================
+  async captureScreenshot() {
+    if (this.isCapturing) {
+      this.showToast('Đang chụp, vui lòng đợi...');
+      return;
+    }
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab) {
+        this.showToast('Không tìm thấy tab!');
+        return;
+      }
+      
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+        this.showToast('Không thể chụp trang Chrome nội bộ!');
+        return;
+      }
+
+      this.isCapturing = true;
+      const toolCard = document.querySelector('[data-tool="screenshot"]');
+      toolCard?.classList.add('capturing');
+      
+      const format = document.querySelector('input[name="screenshotFormat"]:checked')?.value || 'png';
+      const hideFixed = document.getElementById('hideFixedElements')?.checked ?? true;
+
+      if (this.screenshotMode === 'visible') {
+        await this.captureVisibleOnly(tab, format);
+      } else {
+        await this.captureFullPage(tab, format, hideFixed);
+      }
+
+      toolCard?.classList.remove('capturing');
+      this.isCapturing = false;
+    } catch (e) {
+      this.isCapturing = false;
+      document.querySelector('[data-tool="screenshot"]')?.classList.remove('capturing');
+      this.showToast('Lỗi: ' + e.message);
+    }
+  }
+
+  async captureVisibleOnly(tab, format) {
+    this.showProgress('Đang chụp...', 50);
+    
+    const response = await chrome.runtime.sendMessage({
+      action: 'captureVisibleTab',
+      format: format,
+      quality: 100
+    });
+
+    if (response.error) {
+      this.hideProgress();
+      throw new Error(response.error);
+    }
+
+    this.showProgress('Hoàn thành!', 100);
+    this.screenshotData = response.dataUrl;
+    this.showScreenshotPreview(response.dataUrl);
+    this.hideProgress();
+    this.showToast('Đã chụp xong!');
+  }
+
+  async captureFullPage(tab, format, hideFixed) {
+    this.showProgress('Chuẩn bị...', 5);
+
+    // Get page dimensions and prepare
+    const setupResult = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (hideFixed) => {
+        // Save current scroll position
+        const originalScrollX = window.scrollX;
+        const originalScrollY = window.scrollY;
+        
+        // Get full page dimensions
+        const fullHeight = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+          document.body.offsetHeight,
+          document.documentElement.offsetHeight
+        );
+        const fullWidth = Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth,
+          document.body.offsetWidth,
+          document.documentElement.offsetWidth
+        );
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        const devicePixelRatio = window.devicePixelRatio || 1;
+
+        // Find and hide fixed/sticky elements
+        const fixedElements = [];
+        if (hideFixed) {
+          document.querySelectorAll('*').forEach(el => {
+            const style = getComputedStyle(el);
+            if (style.position === 'fixed' || style.position === 'sticky') {
+              fixedElements.push({
+                element: el,
+                originalPosition: style.position,
+                originalDisplay: el.style.display
+              });
+              el.dataset.scanvuiOriginalPosition = style.position;
+              el.dataset.scanvuiOriginalDisplay = el.style.display || '';
+            }
+          });
+        }
+
+        return {
+          fullHeight,
+          fullWidth,
+          viewportHeight,
+          viewportWidth,
+          devicePixelRatio,
+          originalScrollX,
+          originalScrollY,
+          fixedCount: fixedElements.length
+        };
+      },
+      args: [hideFixed]
+    });
+
+    const pageInfo = setupResult?.[0]?.result;
+    if (!pageInfo) {
+      throw new Error('Không thể lấy thông tin trang');
+    }
+
+    const { fullHeight, viewportHeight, devicePixelRatio, originalScrollX, originalScrollY } = pageInfo;
+    const totalScrolls = Math.ceil(fullHeight / viewportHeight);
+    const screenshots = [];
+
+    this.showProgress(`Đang chụp 0/${totalScrolls}...`, 10);
+
+    // Capture each viewport
+    for (let i = 0; i < totalScrolls; i++) {
+      const scrollY = i * viewportHeight;
+      const isLast = i === totalScrolls - 1;
+      
+      // Scroll and hide fixed elements after first screenshot
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (scrollY, hideFixed, isFirst) => {
+          window.scrollTo(0, scrollY);
+          
+          // Hide fixed elements after first capture
+          if (hideFixed && !isFirst) {
+            document.querySelectorAll('[data-scanvui-original-position]').forEach(el => {
+              el.style.display = 'none';
+            });
+          }
+        },
+        args: [scrollY, hideFixed, i === 0]
+      });
+
+      // Wait for render
+      await new Promise(r => setTimeout(r, 150));
+
+      // Capture
+      const response = await chrome.runtime.sendMessage({
+        action: 'captureVisibleTab',
+        format: format,
+        quality: 100
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      screenshots.push({
+        dataUrl: response.dataUrl,
+        scrollY: scrollY,
+        isLast: isLast
+      });
+
+      const progress = 10 + ((i + 1) / totalScrolls) * 70;
+      this.showProgress(`Đang chụp ${i + 1}/${totalScrolls}...`, progress);
+    }
+
+    // Restore page state
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (originalScrollX, originalScrollY) => {
+        // Restore fixed elements
+        document.querySelectorAll('[data-scanvui-original-position]').forEach(el => {
+          el.style.display = el.dataset.scanvuiOriginalDisplay || '';
+          delete el.dataset.scanvuiOriginalPosition;
+          delete el.dataset.scanvuiOriginalDisplay;
+        });
+        
+        // Restore scroll position
+        window.scrollTo(originalScrollX, originalScrollY);
+      },
+      args: [originalScrollX, originalScrollY]
+    });
+
+    this.showProgress('Đang ghép ảnh...', 85);
+
+    // Stitch images
+    const finalImage = await this.stitchImages(screenshots, pageInfo, format);
+    
+    this.showProgress('Hoàn thành!', 100);
+    this.screenshotData = finalImage;
+    this.showScreenshotPreview(finalImage);
+    this.hideProgress();
+    this.showToast('Đã chụp xong!');
+  }
+
+  async stitchImages(screenshots, pageInfo, format) {
+    const { fullHeight, viewportHeight, viewportWidth, devicePixelRatio } = pageInfo;
+    
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = viewportWidth * devicePixelRatio;
+    canvas.height = fullHeight * devicePixelRatio;
+
+    // Load and draw each image
+    for (let i = 0; i < screenshots.length; i++) {
+      const screenshot = screenshots[i];
+      const img = await this.loadImage(screenshot.dataUrl);
+      
+      let sourceY = 0;
+      let sourceHeight = img.height;
+      let destY = screenshot.scrollY * devicePixelRatio;
+      let destHeight = sourceHeight;
+
+      // Handle last image overlap
+      if (screenshot.isLast && screenshots.length > 1) {
+        const expectedY = (screenshots.length - 1) * viewportHeight;
+        const actualBottom = fullHeight;
+        const overlap = expectedY + viewportHeight - actualBottom;
+        
+        if (overlap > 0) {
+          sourceY = overlap * devicePixelRatio;
+          sourceHeight = img.height - sourceY;
+          destY = (fullHeight - (viewportHeight - overlap)) * devicePixelRatio;
+          destHeight = sourceHeight;
+        }
+      }
+
+      ctx.drawImage(
+        img,
+        0, sourceY, img.width, sourceHeight,
+        0, destY, img.width, destHeight
+      );
+    }
+
+    // Export
+    const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const quality = format === 'jpeg' ? 0.95 : undefined;
+    return canvas.toDataURL(mimeType, quality);
+  }
+
+  loadImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+  showProgress(label, percent) {
+    this.screenshotProgress?.classList.remove('hidden');
+    if (this.progressLabel) this.progressLabel.textContent = label;
+    if (this.progressPercent) this.progressPercent.textContent = Math.round(percent) + '%';
+    if (this.progressFill) this.progressFill.style.width = percent + '%';
+  }
+
+  hideProgress() {
+    setTimeout(() => {
+      this.screenshotProgress?.classList.add('hidden');
+    }, 500);
+  }
+
+  showScreenshotPreview(dataUrl) {
+    this.screenshotPreview?.classList.remove('hidden');
+    if (this.previewImage) this.previewImage.src = dataUrl;
+    
+    // Calculate size
+    const base64Length = dataUrl.length - (dataUrl.indexOf(',') + 1);
+    const sizeInBytes = (base64Length * 3) / 4;
+    const sizeInKB = (sizeInBytes / 1024).toFixed(1);
+    const sizeText = sizeInKB > 1024 ? (sizeInKB / 1024).toFixed(2) + ' MB' : sizeInKB + ' KB';
+    
+    if (this.previewSize) this.previewSize.textContent = `Kích thước: ${sizeText}`;
+    
+    // Enable buttons
+    if (this.downloadScreenshotBtn) this.downloadScreenshotBtn.disabled = false;
+    if (this.copyScreenshotBtn) this.copyScreenshotBtn.disabled = false;
+  }
+
+  async downloadScreenshot() {
+    if (!this.screenshotData) {
+      this.showToast('Chưa có ảnh để tải!');
+      return;
+    }
+
+    try {
+      const format = document.querySelector('input[name="screenshotFormat"]:checked')?.value || 'png';
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const hostname = tab?.url ? new URL(tab.url).hostname.replace(/\./g, '-') : 'page';
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const filename = `scanvui-${hostname}-${timestamp}.${format}`;
+
+      // Convert data URL to blob and download
+      const response = await fetch(this.screenshotData);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      
+      URL.revokeObjectURL(url);
+      this.showToast('Đã tải xuống!');
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
+    }
+  }
+
+  async copyScreenshotToClipboard() {
+    if (!this.screenshotData) {
+      this.showToast('Chưa có ảnh để copy!');
+      return;
+    }
+
+    try {
+      const response = await fetch(this.screenshotData);
+      const blob = await response.blob();
+      
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob })
+      ]);
+      
+      this.showToast('Đã copy vào clipboard!');
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
+    }
+  }
+
+  // ============================================
+  // WEBSITE CRAWLER
+  // ============================================
+  // Crawler runs in background service worker, popup just shows status
+  
+  async startCrawler() {
+    try {
+      // Check if already running
+      const status = await chrome.runtime.sendMessage({ action: 'getCrawlerStatus' });
+      
+      if (status.status === 'running') {
+        this.showToast('Crawler đang chạy!');
+        this.showCrawlerRunning();
+        this.updateCrawlerUI(status);
+        this.startCrawlerPolling();
+        return;
+      }
+
+      // If previous crawl completed/error, reset first
+      if (status.status === 'completed' || status.status === 'error' || status.status === 'stopped') {
+        await chrome.runtime.sendMessage({ action: 'resetCrawler' });
+      }
+
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab?.url) {
+        this.showToast('Không tìm thấy tab!');
+        return;
+      }
+
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:')) {
+        this.showToast('Không thể tải trang hệ thống!');
+        return;
+      }
+
+      // Validate URL
+      try {
+        new URL(tab.url);
+      } catch {
+        this.showToast('URL không hợp lệ!');
+        return;
+      }
+
+      const depth = parseInt(document.getElementById('crawlerDepth')?.value) || 2;
+      const maxPages = parseInt(document.getElementById('crawlerMaxPages')?.value) || 50;
+      
+      // Show progress UI immediately
+      this.showCrawlerRunning();
+      
+      // Start crawler in background
+      const response = await chrome.runtime.sendMessage({
+        action: 'startCrawler',
+        tabId: tab.id,
+        startUrl: tab.url,
+        settings: { depth, maxPages }
+      });
+
+      if (response.error) {
+        this.showCrawlerStopped();
+        this.showToast('Lỗi: ' + response.error);
+        return;
+      }
+
+      // Start polling for status
+      this.startCrawlerPolling();
+      
+      this.showToast('Đang tải... (có thể đóng popup)');
+      
+    } catch (e) {
+      this.showCrawlerStopped();
+      this.showToast('Lỗi: ' + e.message);
+      console.error(e);
+    }
+  }
+
+  showCrawlerRunning() {
+    const toolCard = document.querySelector('[data-tool="crawler"]');
+    toolCard?.classList.add('crawling');
+    
+    const startBtn = document.getElementById('startCrawler');
+    const stopBtn = document.getElementById('stopCrawler');
+    if (startBtn) startBtn.disabled = true;
+    if (stopBtn) stopBtn.disabled = false;
+    
+    const crawlerProgress = document.getElementById('crawlerProgress');
+    const crawlerResult = document.getElementById('crawlerResult');
+    crawlerProgress?.classList.remove('hidden');
+    crawlerResult?.classList.add('hidden');
+  }
+
+  showCrawlerStopped() {
+    const toolCard = document.querySelector('[data-tool="crawler"]');
+    toolCard?.classList.remove('crawling');
+    
+    const startBtn = document.getElementById('startCrawler');
+    const stopBtn = document.getElementById('stopCrawler');
+    if (startBtn) startBtn.disabled = false;
+    if (stopBtn) stopBtn.disabled = true;
+  }
+
+  startCrawlerPolling() {
+    // Clear existing interval
+    if (this.crawlerPollInterval) {
+      clearInterval(this.crawlerPollInterval);
+      this.crawlerPollInterval = null;
+    }
+
+    let errorCount = 0;
+    const MAX_ERRORS = 5;
+
+    // Poll every 500ms
+    this.crawlerPollInterval = setInterval(async () => {
+      try {
+        const status = await chrome.runtime.sendMessage({ action: 'getCrawlerStatus' });
+        
+        if (!status) {
+          errorCount++;
+          if (errorCount >= MAX_ERRORS) {
+            this.stopPolling();
+            this.showCrawlerStopped();
+          }
+          return;
+        }
+        
+        errorCount = 0; // Reset on success
+        this.updateCrawlerUI(status);
+
+        // Stop polling if not running
+        if (status.status !== 'running') {
+          this.stopPolling();
+          this.showCrawlerStopped();
+          
+          if (status.status === 'completed') {
+            this.showCrawlerResult(status);
+          } else if (status.status === 'error') {
+            this.showToast('Lỗi: ' + (status.error || 'Không xác định'));
+          } else if (status.status === 'stopped') {
+            this.showToast('Đã dừng');
+          }
+        }
+      } catch (e) {
+        console.error('Polling error:', e);
+        errorCount++;
+        if (errorCount >= MAX_ERRORS) {
+          this.stopPolling();
+          this.showCrawlerStopped();
+        }
+      }
+    }, 500);
+  }
+
+  stopPolling() {
+    if (this.crawlerPollInterval) {
+      clearInterval(this.crawlerPollInterval);
+      this.crawlerPollInterval = null;
+    }
+  }
+
+  updateCrawlerUI(status) {
+    if (!status) return;
+
+    const progressEl = document.getElementById('crawlerProgress');
+    
+    // Show progress panel if running
+    if (status.status === 'running' && progressEl) {
+      progressEl.classList.remove('hidden');
+    }
+
+    // Update progress elements
+    const labelEl = document.getElementById('crawlerProgressLabel');
+    const percentEl = document.getElementById('crawlerProgressPercent');
+    const fillEl = document.getElementById('crawlerProgressFill');
+    const pagesEl = document.getElementById('crawlerPagesCount');
+    const imagesEl = document.getElementById('crawlerImagesCount');
+    const currentUrlEl = document.getElementById('crawlerCurrentUrl');
+    
+    if (labelEl) labelEl.textContent = status.progressLabel || 'Đang xử lý...';
+    if (percentEl) percentEl.textContent = (status.progress || 0) + '%';
+    if (fillEl) fillEl.style.width = (status.progress || 0) + '%';
+    if (pagesEl) pagesEl.textContent = status.pageCount || 0;
+    if (imagesEl) imagesEl.textContent = status.imageCount || 0;
+    
+    if (currentUrlEl) {
+      const url = status.currentUrl || '';
+      currentUrlEl.textContent = url.length > 60 ? url.substring(0, 57) + '...' : url;
+      currentUrlEl.title = url; // Full URL on hover
+    }
+  }
+
+  showCrawlerResult(status) {
+    const progressEl = document.getElementById('crawlerProgress');
+    const resultEl = document.getElementById('crawlerResult');
+    const infoEl = document.getElementById('crawlerResultInfo');
+    const folderEl = document.getElementById('crawlerFolderName');
+    
+    progressEl?.classList.add('hidden');
+    resultEl?.classList.remove('hidden');
+    
+    if (infoEl) {
+      infoEl.textContent = `${status.pageCount || 0} trang, ${status.imageCount || 0} ảnh`;
+    }
+    if (folderEl) {
+      folderEl.textContent = status.folderName || '';
+    }
+  }
+
+  async stopCrawler() {
+    try {
+      await chrome.runtime.sendMessage({ action: 'stopCrawler' });
+      this.showToast('Đang dừng...');
+      
+      // Don't immediately stop polling - let it detect the stopped state
+      setTimeout(() => {
+        this.stopPolling();
+        this.showCrawlerStopped();
+      }, 1000);
+      
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
+      this.stopPolling();
+      this.showCrawlerStopped();
+    }
+  }
+
+  async checkCrawlerOnLoad() {
+    try {
+      const status = await chrome.runtime.sendMessage({ action: 'getCrawlerStatus' });
+      
+      if (!status || status.status === 'idle') return;
+      
+      // Get current tab URL
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const currentUrl = tab?.url;
+      
+      // Check if the crawl result is for a different domain
+      if (status.startUrl && currentUrl) {
+        try {
+          const crawledHost = new URL(status.startUrl).hostname;
+          const currentHost = new URL(currentUrl).hostname;
+          
+          // Different domain - don't show old results, reset instead
+          if (crawledHost !== currentHost) {
+            // Only reset if not currently running
+            if (status.status !== 'running') {
+              await chrome.runtime.sendMessage({ action: 'resetCrawler' });
+              return;
+            }
+          }
+        } catch {}
+      }
+      
+      if (status.status === 'running') {
+        this.showCrawlerRunning();
+        this.updateCrawlerUI(status);
+        this.startCrawlerPolling();
+      } else if (status.status === 'completed') {
+        this.showCrawlerResult(status);
+      } else if (status.status === 'error') {
+        const progressEl = document.getElementById('crawlerProgress');
+        const labelEl = document.getElementById('crawlerProgressLabel');
+        progressEl?.classList.remove('hidden');
+        if (labelEl) labelEl.textContent = 'Lỗi: ' + (status.error || 'Không xác định');
+      }
+    } catch (e) {
+      console.error('Error checking crawler status:', e);
+    }
+  }
+
+  // Download files from popup context (fallback method)
+  async redownloadFromPopup() {
+    this.showToast('Đang lấy dữ liệu...');
+    
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getCrawlerPages' });
+      
+      if (response.error) {
+        this.showToast('Lỗi: ' + response.error);
+        return;
+      }
+      
+      if (!response.pages || response.pages.length === 0) {
+        this.showToast('Không có trang nào để tải!');
+        return;
+      }
+      
+      const { pages, folderName } = response;
+      this.showToast(`Đang tải ${pages.length} trang...`);
+      
+      let downloaded = 0;
+      
+      for (const page of pages) {
+        try {
+          // Create blob and download from popup context
+          const blob = new Blob([page.html], { type: 'text/html;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          
+          await chrome.downloads.download({
+            url: url,
+            filename: `${folderName}/${page.filename}`,
+            saveAs: false,
+            conflictAction: 'uniquify'
+          });
+          
+          // Delay revoke to ensure download starts
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          
+          downloaded++;
+        } catch (e) {
+          console.error('Download error:', page.filename, e);
+        }
+        
+        // Small delay between downloads
+        await new Promise(r => setTimeout(r, 100));
+      }
+      
+      this.showToast(`Đã tải ${downloaded}/${pages.length} trang!`);
+      
+    } catch (e) {
+      this.showToast('Lỗi: ' + e.message);
+      console.error(e);
+    }
+  }
+
+  // ============================================
   // EXPORT
   // ============================================
   async exportReport(format) {
@@ -1006,12 +1781,21 @@ Scripts,${d.scripts?.total || 0}`;
   }
 
   // ============================================
-  // TOAST
+  // TOAST (with debounce to prevent spam)
   // ============================================
   showToast(message) {
+    // Clear existing timeout
+    if (this.toastTimeout) {
+      clearTimeout(this.toastTimeout);
+    }
+    
     this.toast.textContent = message;
     this.toast.classList.remove('hidden');
-    setTimeout(() => this.toast.classList.add('hidden'), 2500);
+    
+    this.toastTimeout = setTimeout(() => {
+      this.toast.classList.add('hidden');
+      this.toastTimeout = null;
+    }, 2500);
   }
 }
 
