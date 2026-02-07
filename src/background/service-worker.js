@@ -425,7 +425,67 @@ async function getPageHtmlFromTab(tabId) {
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
-      func: () => document.documentElement.outerHTML
+      func: () => {
+        // Expand/unhide all hidden content before capturing
+        // 1. Remove hidden attribute
+        document.querySelectorAll('[hidden]').forEach(el => el.removeAttribute('hidden'));
+        
+        // 2. Force show elements with display:none or visibility:hidden (content containers only)
+        document.querySelectorAll('*').forEach(el => {
+          const style = getComputedStyle(el);
+          const tag = el.tagName.toLowerCase();
+          // Skip script, style, meta elements
+          if (['script', 'style', 'link', 'meta', 'head', 'noscript'].includes(tag)) return;
+          // Only unhide elements that look like content containers
+          if (style.display === 'none' && el.children.length >= 0) {
+            // Check if this is a content panel (not a popup/modal/overlay)
+            const classes = el.className.toLowerCase();
+            const id = (el.id || '').toLowerCase();
+            const isContentPanel = /panel|content|body|text|detail|answer|collapse|accordion|tab-pane|section/
+              .test(classes + ' ' + id);
+            const isDropdown = /dropdown|menu|popup|modal|overlay|tooltip|popover|lightbox|dialog|backdrop/
+              .test(classes + ' ' + id);
+            if (isContentPanel || (!isDropdown && el.textContent.trim().length > 20)) {
+              el.style.display = '';
+              el.style.setProperty('display', 'block', 'important');
+            }
+          }
+          if (style.visibility === 'hidden') {
+            el.style.setProperty('visibility', 'visible', 'important');
+          }
+          // 3. Expand collapsed height (max-height: 0)
+          if (style.maxHeight === '0px' || style.maxHeight === '0') {
+            el.style.setProperty('max-height', 'none', 'important');
+          }
+          if (style.overflow === 'hidden' && style.maxHeight !== 'none' && parseInt(style.maxHeight) < 50) {
+            el.style.setProperty('max-height', 'none', 'important');
+            el.style.setProperty('overflow', 'visible', 'important');
+          }
+        });
+        
+        // 4. Expand <details> elements
+        document.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
+        
+        // 5. Mark aria-expanded as true, aria-hidden as false
+        document.querySelectorAll('[aria-expanded="false"]').forEach(el => el.setAttribute('aria-expanded', 'true'));
+        document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
+          const classes = el.className.toLowerCase();
+          if (!/modal|overlay|backdrop|popup|lightbox|dialog/.test(classes)) {
+            el.setAttribute('aria-hidden', 'false');
+            el.style.setProperty('display', 'block', 'important');
+          }
+        });
+        
+        // 6. Expand Bootstrap/Tailwind collapse
+        document.querySelectorAll('.collapse:not(.show), .collapsed').forEach(el => {
+          el.classList.add('show');
+          el.classList.remove('collapsed', 'collapse');
+          el.style.setProperty('display', 'block', 'important');
+          el.style.setProperty('height', 'auto', 'important');
+        });
+        
+        return document.documentElement.outerHTML;
+      }
     });
     return results?.[0]?.result || null;
   } catch (e) {
@@ -735,8 +795,39 @@ function processAllPages() {
       return match;
     });
     
-    // Remove scripts to avoid errors offline
+    // Remove problematic scripts (tracking, analytics, external) but keep basic structure
+    // Remove all script tags - content is already "baked" with unhidden state
     html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    // Inject lightweight offline toggle script (for any remaining interactive elements)
+    const offlineScript = `
+<script>
+document.addEventListener('click', function(e) {
+  var t = e.target.closest('[data-toggle],[data-bs-toggle],summary,.accordion-header,.collapsible,.toggle-btn,[role="tab"],[role="button"]');
+  if (!t) return;
+  var target = t.getAttribute('data-target') || t.getAttribute('data-bs-target') || t.getAttribute('href');
+  if (target && target.startsWith('#')) {
+    var panel = document.querySelector(target);
+    if (panel) {
+      var isHidden = panel.style.display === 'none' || !panel.offsetHeight;
+      panel.style.display = isHidden ? 'block' : 'none';
+      t.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+    }
+  }
+  var next = t.nextElementSibling;
+  if (next && next.children.length > 0) {
+    var isHidden = next.style.display === 'none' || !next.offsetHeight;
+    next.style.display = isHidden ? 'block' : 'none';
+  }
+});
+</script>`;
+    
+    // Insert before </body> or at end
+    if (html.includes('</body>')) {
+      html = html.replace('</body>', offlineScript + '</body>');
+    } else {
+      html += offlineScript;
+    }
     
     // Add base tag to help with relative resources (optional)
     // html = html.replace(/<head>/i, '<head><base href="./">');
