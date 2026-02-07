@@ -457,133 +457,49 @@ async function getPageHtmlWithUnhide(tabId) {
       target: { tabId },
       func: () => {
         try {
-          // === STEP A: HIDE problematic overlapping elements ===
-          // Sidebar, drawer, nav-overlay, off-canvas that may cover main content
-          const hideSelectors = [
-            '[class*="sidebar"]', '[class*="side-bar"]', '[class*="side_bar"]',
-            '[class*="drawer"]', '[class*="offcanvas"]', '[class*="off-canvas"]',
-            '[class*="nav-overlay"]', '[class*="sidenav"]', '[class*="side-nav"]',
-            '[class*="left-panel"]', '[class*="right-panel"]',
-            '.nav-menu', '.mobile-menu', '.hamburger-menu',
-            '[class*="flyout"]', '[class*="slide-menu"]',
-            '[role="navigation"][aria-hidden]'
-          ];
-          const mainContentPatterns = /main|content|article|page|wrapper|app|root/i;
-          
-          document.querySelectorAll(hideSelectors.join(',')).forEach(el => {
-            try {
-              const style = getComputedStyle(el);
-              const cls = (typeof el.className === 'string' ? el.className : '');
-              // Only hide if it's a fixed/absolute positioned sidebar
-              const isFixed = style.position === 'fixed' || style.position === 'absolute';
-              const isOffScreen = parseInt(style.left) < -50 || parseInt(style.right) < -50 ||
-                                  style.transform.includes('translate');
-              const isNarrow = el.offsetWidth > 0 && el.offsetWidth < 400;
-              
-              // If it looks like a sidebar (fixed/absolute, narrow, off-screen or overlapping)
-              if (isFixed && isNarrow && !mainContentPatterns.test(cls)) {
-                el.style.setProperty('display', 'none', 'important');
-              }
-              // If it was hidden but we might accidentally unhide it later
-              if (style.display === 'none' || isOffScreen) {
-                el.setAttribute('data-scanvui-keep-hidden', 'true');
-              }
-            } catch {}
-          });
-          
-          // STEP A2: Detect and hide ANY nav element that overlaps content (for Google Sites etc.)
-          document.querySelectorAll('nav').forEach(nav => {
-            try {
-              const style = getComputedStyle(nav);
-              const pos = style.position;
-              // Hide nav elements that are fixed/absolute positioned (typically side navs)
-              if (pos === 'fixed' || pos === 'absolute') {
-                nav.setAttribute('data-scanvui-keep-hidden', 'true');
-                nav.style.setProperty('display', 'none', 'important');
-              }
-            } catch {}
-          });
-          
-          // STEP A3: Hide ALL fixed-position divs that are full-width overlays or narrow sidebars
-          document.querySelectorAll('div').forEach(el => {
-            try {
-              const style = getComputedStyle(el);
-              if (style.position !== 'fixed') return;
-              const zIndex = parseInt(style.zIndex);
-              if (isNaN(zIndex) || zIndex < 50) return;
-              // High z-index fixed elements are typically headers/overlays
-              const h = el.offsetHeight;
-              const w = el.offsetWidth;
-              // Narrow fixed = sidebar; short full-width = header bar
-              if ((w > 0 && w < 350) || (h > 0 && h < 80 && w > 500)) {
-                el.style.setProperty('position', 'relative', 'important');
-                el.style.setProperty('z-index', '0', 'important');
-              }
-            } catch {}
-          });
-          
-          // STEP A4: Remove browser extension elements
-          document.querySelectorAll('savior-host, en2vi-host, [class*="--savior"], [class*="corom-element"]').forEach(el => {
-            el.remove();
-          });
-          
-          // === STEP B: UNHIDE content panels ===
-          // 1. Remove hidden attribute (but not on sidebar elements)
-          document.querySelectorAll('[hidden]:not([data-scanvui-keep-hidden])').forEach(el => {
-            el.removeAttribute('hidden');
-          });
+          // 1. Remove hidden attribute
+          document.querySelectorAll('[hidden]').forEach(el => el.removeAttribute('hidden'));
           
           // 2. Expand <details> elements
           document.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
           
           // 3. Expand Bootstrap/Tailwind collapse
           document.querySelectorAll('.collapse:not(.show), .collapsed').forEach(el => {
-            const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-            if (/sidebar|drawer|offcanvas|nav|menu/.test(cls)) return;
             el.classList.add('show');
             el.classList.remove('collapsed');
             el.style.setProperty('display', 'block', 'important');
             el.style.setProperty('height', 'auto', 'important');
           });
           
-          // 4. Set aria-expanded to true (content triggers only)
+          // 4. Set aria-expanded to true
           document.querySelectorAll('[aria-expanded="false"]').forEach(el => {
-            const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-            if (/sidebar|drawer|offcanvas|nav|menu|hamburger/.test(cls)) return;
             el.setAttribute('aria-expanded', 'true');
           });
           
-          // 5. Unhide aria-hidden content panels (not modals, not sidebars)
-          const skipAria = /modal|overlay|backdrop|popup|lightbox|dialog|sidebar|drawer|offcanvas|nav|menu/i;
+          // 5. Unhide aria-hidden content panels (not modals)
           document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
             const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-            if (skipAria.test(cls)) return;
-            el.setAttribute('aria-hidden', 'false');
-            if (el.style) el.style.setProperty('display', 'block', 'important');
+            if (!/modal|overlay|backdrop|popup|lightbox|dialog/.test(cls)) {
+              el.setAttribute('aria-hidden', 'false');
+              if (el.style) el.style.setProperty('display', 'block', 'important');
+            }
           });
           
-          // 6. Targeted unhide for known content patterns
+          // 6. Targeted unhide for known content patterns (not querySelectorAll('*'))
           const contentSelectors = [
-            '[class*="panel"]:not([data-scanvui-keep-hidden])',
-            '[class*="content"]:not([data-scanvui-keep-hidden])',
-            '[class*="body"]:not([data-scanvui-keep-hidden])',
-            '[class*="detail"]:not([data-scanvui-keep-hidden])',
-            '[class*="answer"]:not([data-scanvui-keep-hidden])',
-            '[class*="collapse"]:not([data-scanvui-keep-hidden])',
-            '[class*="accordion"]:not([data-scanvui-keep-hidden])',
-            '[class*="tab-pane"]:not([data-scanvui-keep-hidden])',
-            '[class*="tabpanel"]:not([data-scanvui-keep-hidden])',
-            '[class*="section"]:not([data-scanvui-keep-hidden])',
-            '[class*="faq"]:not([data-scanvui-keep-hidden])',
+            '[class*="panel"]', '[class*="content"]', '[class*="body"]',
+            '[class*="detail"]', '[class*="answer"]', '[class*="collapse"]',
+            '[class*="accordion"]', '[class*="tab-pane"]', '[class*="tabpanel"]',
+            '[class*="section"]', '[class*="faq"]', '[class*="toggle"]',
             '[role="tabpanel"]', '[role="region"]'
           ];
-          const skipContent = /dropdown|menu|popup|modal|overlay|tooltip|popover|lightbox|dialog|backdrop|nav-sub|submenu|sidebar|drawer|offcanvas/i;
+          const skipPatterns = /dropdown|menu|popup|modal|overlay|tooltip|popover|lightbox|dialog|backdrop|nav-sub|submenu/i;
           
           document.querySelectorAll(contentSelectors.join(',')).forEach(el => {
             try {
               const style = getComputedStyle(el);
               const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-              if (skipContent.test(cls)) return;
+              if (skipPatterns.test(cls)) return;
               
               if (style.display === 'none') {
                 el.style.setProperty('display', 'block', 'important');
@@ -611,56 +527,10 @@ async function getPageHtmlWithUnhide(tabId) {
               img.src = lazySrc;
             }
           });
+          // Also handle <source> in <picture>
           document.querySelectorAll('source[data-srcset]').forEach(src => {
             const srcset = src.getAttribute('data-srcset');
             if (srcset) src.setAttribute('srcset', srcset);
-          });
-          
-          // === STEP C: Fix layout for offline viewing ===
-          // Remove fixed positioning from headers/footers and their children
-          document.querySelectorAll('header, footer, [class*="header"], [class*="footer"], [class*="navbar"], [class*="topbar"]').forEach(el => {
-            try {
-              const style = getComputedStyle(el);
-              if (style.position === 'fixed' || style.position === 'sticky') {
-                el.style.setProperty('position', 'relative', 'important');
-              }
-              // Also fix child divs with inline position:fixed
-              el.querySelectorAll('[style*="position"]').forEach(child => {
-                try {
-                  const cs = getComputedStyle(child);
-                  if (cs.position === 'fixed' || cs.position === 'sticky') {
-                    child.style.setProperty('position', 'relative', 'important');
-                    child.style.setProperty('z-index', '0', 'important');
-                  }
-                } catch {}
-              });
-            } catch {}
-          });
-          
-          // Remove role="banner" fixed elements (Google Sites header pattern)
-          document.querySelectorAll('[role="banner"]').forEach(el => {
-            try {
-              el.style.setProperty('position', 'relative', 'important');
-            } catch {}
-          });
-          
-          // Ensure main content is not pushed/offset by sidebar
-          document.querySelectorAll('main, [role="main"], [class*="main-content"], [class*="page-content"], #content, .content').forEach(el => {
-            try {
-              el.style.setProperty('margin-left', '0', 'important');
-              el.style.setProperty('padding-left', '', '');
-              el.style.setProperty('transform', 'none', 'important');
-              el.style.setProperty('width', '100%', 'important');
-              el.style.setProperty('max-width', '100%', 'important');
-            } catch {}
-          });
-          
-          // Remove jsaction/jscontroller attributes that cause JS errors offline
-          document.querySelectorAll('[jsaction], [jscontroller], [jsmodel], [jsshadow]').forEach(el => {
-            el.removeAttribute('jsaction');
-            el.removeAttribute('jscontroller');
-            el.removeAttribute('jsmodel');
-            el.removeAttribute('jsshadow');
           });
           
         } catch (e) {
@@ -1080,17 +950,6 @@ function processAllPages() {
     // Remove all script tags - content is already "baked" with unhidden state
     html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
     
-    // Remove browser extension elements (savior, en2vi, etc.)
-    html = html.replace(/<savior-host[^>]*>[\s\S]*?<\/savior-host>/gi, '');
-    html = html.replace(/<en2vi-host[^>]*>[\s\S]*?<\/en2vi-host>/gi, '');
-    html = html.replace(/<[^>]+class="[^"]*corom-element[^"]*"[^>]*>[\s\S]*?<\/[^>]+>/gi, '');
-    
-    // Remove browser extension CSS (--savior styles, etc.)
-    html = html.replace(/<style[^>]*>[\s\S]*?--savior[\s\S]*?<\/style>/gi, '');
-    
-    // Remove jsaction/jscontroller/jsmodel attributes that cause JS errors offline
-    html = html.replace(/\s+(jsaction|jscontroller|jsmodel|jsname|jsshadow|jsslot)="[^"]*"/gi, '');
-    
     // Inject lightweight offline toggle script (for any remaining interactive elements)
     const offlineScript = `
 <script>
@@ -1137,77 +996,6 @@ function processAllPages() {
     // Ensure UTF-8 charset meta tag exists
     if (!html.match(/<meta[^>]+charset/i)) {
       html = html.replace(/<head/i, '<head>\n<meta charset="utf-8">');
-    }
-    
-    // Inject auto-fix CSS for clean offline viewing
-    const fixCss = `
-<style id="scanvui-offline-fix">
-/* ScanVui Offline Layout Fix */
-[data-scanvui-keep-hidden] { display: none !important; }
-body { overflow-x: hidden; overflow-y: auto !important; }
-/* Hide sidebars, drawers, overlays that may overlap content */
-[class*="sidebar"][style*="position: fixed"],
-[class*="sidebar"][style*="position: absolute"],
-[class*="drawer"], [class*="offcanvas"], [class*="off-canvas"],
-[class*="nav-overlay"], [class*="slide-menu"],
-.modal-backdrop, .overlay, [class*="backdrop"] {
-  display: none !important;
-}
-/* Hide browser extension elements */
-savior-host, en2vi-host, [class*="--savior"], [class*="corom-element"] {
-  display: none !important;
-}
-/* Reset main content to full width */
-main, [role="main"], [class*="main-content"], [class*="page-content"] {
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  padding-left: 16px !important;
-  padding-right: 16px !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  transform: none !important;
-}
-/* Reset ALL position:fixed to relative (critical for JS-heavy sites) */
-header[style*="position: fixed"], header[style*="position: sticky"],
-[class*="navbar"][style*="position: fixed"],
-footer[style*="position: fixed"],
-[role="banner"], [role="banner"] > div[style*="position"],
-div[style*="position: fixed"][style*="z-index"] {
-  position: relative !important;
-  z-index: auto !important;
-}
-/* Google Sites specific: hide side nav, hamburger, fixed header overlays */
-nav[role="navigation"] {
-  position: relative !important;
-  display: none !important;
-}
-/* Google Sites hamburger/toggle button */
-div[title*="thanh bên"], div[title*="sidebar"], div[aria-label*="navigation"] {
-  display: none !important;
-}
-/* Google Sites top nav bar - make it relative instead of fixed */
-div[data-top-navigation] {
-  position: relative !important;
-}
-/* Ensure body is not locked */
-body.modal-open, body.overflow-hidden, body[style*="overflow: hidden"] {
-  overflow: auto !important;
-  padding-right: 0 !important;
-}
-/* Reset any transform on body */
-body[style*="transform"] { transform: none !important; }
-/* Remove extra spacing from hidden side nav */
-body > div > div > div {
-  padding-left: 0 !important;
-  margin-left: 0 !important;
-}
-</style>`;
-    
-    // Insert fix CSS into <head>
-    if (html.includes('</head>')) {
-      html = html.replace('</head>', fixCss + '</head>');
-    } else if (html.includes('<body')) {
-      html = html.replace(/<body/i, fixCss + '<body');
     }
     
     // Add base tag to help with relative resources (optional)
