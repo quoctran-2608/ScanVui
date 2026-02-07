@@ -209,15 +209,16 @@ async function startCrawlerInBackground(tabId, startUrl, settings) {
     baseHost: baseUrl.hostname,
     startUrl,
     tabId,
+    crawlerTabId: null, // Separate tab for crawling (preserves user's tab)
     settings: {
-      depth: Math.min(settings.depth || 2, 10), // Cap depth at 10
-      maxPages: Math.min(settings.maxPages || 50, 1000) // Cap pages at 1000
+      depth: Math.min(settings.depth || 2, 10),
+      maxPages: Math.min(settings.maxPages || 50, 1000)
     },
     visited: new Set(),
     queue: [{ url: startUrl, depth: 0 }],
     pages: [],
-    pendingImages: [], // Store URLs only, not data
-    downloadedImages: new Map(), // filename -> url mapping
+    pendingImages: [],
+    downloadedImages: new Map(),
     pageCount: 0,
     imageCount: 0,
     currentUrl: '',
@@ -281,82 +282,100 @@ async function executeCrawler() {
     updateProgress(`Tìm thấy ${links.length} links`, 10);
     await saveCrawlerState();
 
-    // Step 2: Crawl child pages
-    while (crawlerState.queue.length > 0) {
-      // Check abort
-      if (crawlerAbortController?.signal?.aborted) {
-        crawlerState.status = 'stopped';
-        crawlerState.progressLabel = 'Đã dừng';
-        await saveCrawlerState();
-        return;
-      }
+    // Step 2: Create a hidden tab for crawling (preserves user's original tab)
+    let crawlerTab;
+    try {
+      crawlerTab = await chrome.tabs.create({ 
+        url: 'about:blank', 
+        active: false 
+      });
+      crawlerState.crawlerTabId = crawlerTab.id;
+    } catch (e) {
+      throw new Error('Không thể tạo tab để crawl: ' + e.message);
+    }
 
-      // Check limits
-      if (crawlerState.pageCount >= maxPages) {
-        break;
-      }
-
-      // Check timeout
-      if (Date.now() - startTime > maxTime) {
-        updateProgress('Đạt giới hạn thời gian (30 phút)', 80);
-        break;
-      }
-
-      const item = crawlerState.queue.shift();
-      if (!item) break;
-      
-      const { url, depth } = item;
-      
-      if (maxDepth > 0 && depth > maxDepth) continue;
-      
-      const normalizedUrl = normalizeUrl(url);
-      if (crawlerState.visited.has(normalizedUrl)) continue;
-      crawlerState.visited.add(normalizedUrl);
-
-      crawlerState.currentUrl = url;
-      const progress = Math.min(75, 10 + (crawlerState.pageCount / maxPages) * 65);
-      updateProgress(`Trang ${crawlerState.pageCount + 1}/${maxPages}`, progress);
-
-      try {
-        const response = await fetchUrlWithRetry(url, { timeout: 10000 });
-        
-        if (response.error || !response.text) continue;
-        
-        // Only process HTML
-        const contentType = (response.contentType || '').toLowerCase();
-        if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
-          continue;
+    // Step 3: Crawl child pages using tab navigation (with auth cookies)
+    try {
+      while (crawlerState.queue.length > 0) {
+        if (crawlerAbortController?.signal?.aborted) {
+          crawlerState.status = 'stopped';
+          crawlerState.progressLabel = 'Đã dừng';
+          await saveCrawlerState();
+          break;
         }
 
-        const html = response.text;
-        const filename = generateUniqueFilename(url, crawlerState.pageCount, crawlerState.usedFilenames);
-        const title = decodeHtmlEntities(extractTitleFromHtml(html));
+        if (crawlerState.pageCount >= maxPages) break;
 
-        crawlerState.pages.push({ url, html, filename, title });
-        crawlerState.pageCount++;
+        if (Date.now() - startTime > maxTime) {
+          updateProgress('Đạt giới hạn thời gian (30 phút)', 80);
+          break;
+        }
 
-        // Extract more links
-        if (maxDepth === 0 || depth < maxDepth) {
-          const childLinks = extractLinksFromHtml(html, url, crawlerState.baseHost);
-          for (const link of childLinks) {
-            const normalized = normalizeUrl(link);
-            if (!crawlerState.visited.has(normalized) && 
-                crawlerState.queue.length < maxPages * 3) { // Limit queue size
-              crawlerState.queue.push({ url: link, depth: depth + 1 });
+        const item = crawlerState.queue.shift();
+        if (!item) break;
+        
+        const { url, depth } = item;
+        
+        if (maxDepth > 0 && depth > maxDepth) continue;
+        
+        const normalizedUrl = normalizeUrl(url);
+        if (crawlerState.visited.has(normalizedUrl)) continue;
+        crawlerState.visited.add(normalizedUrl);
+
+        crawlerState.currentUrl = url;
+        const progress = Math.min(75, 10 + (crawlerState.pageCount / maxPages) * 65);
+        updateProgress(`Trang ${crawlerState.pageCount + 1}/${maxPages}`, progress);
+
+        try {
+          // Check if crawler tab still exists
+          try { await chrome.tabs.get(crawlerState.crawlerTabId); } catch {
+            crawlerTab = await chrome.tabs.create({ url: 'about:blank', active: false });
+            crawlerState.crawlerTabId = crawlerTab.id;
+          }
+
+          // Navigate crawler tab to URL (browser sends cookies automatically!)
+          const result = await getPageHtmlViaTab(crawlerState.crawlerTabId, url, 15000);
+          
+          if (!result || !result.html) continue;
+
+          const html = result.html;
+          const filename = generateUniqueFilename(url, crawlerState.pageCount, crawlerState.usedFilenames);
+          const title = decodeHtmlEntities(result.title || extractTitleFromHtml(html));
+
+          crawlerState.pages.push({ url, html, filename, title });
+          crawlerState.pageCount++;
+
+          // Extract more links
+          if (maxDepth === 0 || depth < maxDepth) {
+            const childLinks = extractLinksFromHtml(html, url, crawlerState.baseHost);
+            for (const link of childLinks) {
+              const normalized = normalizeUrl(link);
+              if (!crawlerState.visited.has(normalized) && 
+                  crawlerState.queue.length < maxPages * 3) {
+                crawlerState.queue.push({ url: link, depth: depth + 1 });
+              }
             }
           }
-        }
 
-        // Save state every 5 pages
-        if (crawlerState.pageCount % 5 === 0) {
-          await saveCrawlerState();
+          if (crawlerState.pageCount % 5 === 0) {
+            await saveCrawlerState();
+          }
+          
+          await delay(200);
+          
+        } catch (e) {
+          // Silently skip failed URLs
+          console.log(`[ScanVui] Skip ${url}: ${e.message}`);
         }
-        
-        await delay(80);
-        
-      } catch (e) {
-        // Silently skip failed URLs
       }
+    } finally {
+      // Close the crawler tab
+      try {
+        if (crawlerState.crawlerTabId) {
+          await chrome.tabs.remove(crawlerState.crawlerTabId);
+          crawlerState.crawlerTabId = null;
+        }
+      } catch {}
     }
 
     // Step 3: Collect image URLs (don't download yet)
@@ -425,6 +444,63 @@ async function getPageTitle(tabId) {
   } catch {
     return 'Untitled';
   }
+}
+
+// Navigate a tab to URL, wait for load, and extract HTML (preserves auth/cookies)
+async function getPageHtmlViaTab(tabId, url, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    let listener = null;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      if (listener) chrome.tabs.onUpdated.removeListener(listener);
+    };
+
+    const settle = (value, error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(value);
+    };
+
+    timer = setTimeout(() => {
+      // Timeout - try to get whatever HTML is available
+      getPageHtmlFromTab(tabId).then(html => {
+        if (html) {
+          getPageTitle(tabId).then(title => {
+            settle({ html, title: title || 'Untitled' });
+          }).catch(() => settle({ html, title: 'Untitled' }));
+        } else {
+          settle(null);
+        }
+      }).catch(() => settle(null));
+    }, timeoutMs);
+
+    listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId !== tabId) return;
+      if (changeInfo.status === 'complete') {
+        // Small delay to let JS render
+        setTimeout(async () => {
+          try {
+            const html = await getPageHtmlFromTab(tabId);
+            const title = await getPageTitle(tabId);
+            settle({ html, title });
+          } catch (e) {
+            settle(null, e);
+          }
+        }, 500);
+      }
+    };
+
+    chrome.tabs.onUpdated.addListener(listener);
+
+    chrome.tabs.update(tabId, { url }).catch(e => {
+      settle(null, e);
+    });
+  });
 }
 
 function decodeHtmlEntities(text) {
@@ -912,6 +988,11 @@ function stopCrawler() {
     crawlerState.status = 'stopped';
     crawlerState.progressLabel = 'Đã dừng';
     saveCrawlerState();
+    // Close crawler tab if it exists
+    if (crawlerState.crawlerTabId) {
+      chrome.tabs.remove(crawlerState.crawlerTabId).catch(() => {});
+      crawlerState.crawlerTabId = null;
+    }
   }
   stopKeepAlive();
 }
@@ -942,10 +1023,9 @@ async function fetchUrlWithRetry(url, options = {}) {
     
     try {
       const response = await fetch(url, {
-        credentials: 'omit',
+        credentials: 'include',
         signal: controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': options.responseType === 'base64' 
             ? 'image/*,*/*;q=0.8'
             : 'text/html,application/xhtml+xml,*/*;q=0.8'

@@ -1,6 +1,6 @@
 # ScanVui - Chrome Extension
 
-![Phiên bản](https://img.shields.io/badge/phiên_bản-3.4.0-blue)
+![Phiên bản](https://img.shields.io/badge/phiên_bản-3.5.0-blue)
 ![Chrome](https://img.shields.io/badge/chrome-extension-green)
 ![Giấy phép](https://img.shields.io/badge/giấy_phép-MIT-orange)
 
@@ -54,10 +54,12 @@ Quét toàn diện và đánh giá theo 4 tiêu chí:
 
 ### 3. 🌐 Tải Website Offline (Crawler)
 Tải toàn bộ website về máy (chạy nền, không cần giữ popup):
+- **Hỗ trợ trang cần đăng nhập** - crawl với session cookies của browser
+- Tạo tab ẩn để crawl, không ảnh hưởng tab đang dùng
 - Độ sâu tùy chỉnh (1-5 level hoặc không giới hạn)
 - Giới hạn số trang (20-1000)
 - Thay thế links thành local paths
-- Tải ảnh kèm theo
+- Tải ảnh kèm theo (cũng hỗ trợ auth)
 - Thông báo khi hoàn thành
 
 ### 4. 🖼️ Media Scanner
@@ -145,7 +147,14 @@ ScanVui/
 
 ## Lịch sử phiên bản
 
-### v3.4.0 (Hiện tại)
+### v3.5.0 (Hiện tại)
+- ✨ **MỚI:** Crawler hỗ trợ website cần đăng nhập (authenticated crawling)
+- ✨ **MỚI:** Dùng tab navigation thay vì fetch() - browser tự gửi cookies/session
+- ✨ **MỚI:** Tạo tab ẩn để crawl, không ảnh hưởng tab đang làm việc
+- 🔧 **CẢI TIẾN:** Image fetch cũng gửi credentials
+- 🔧 **CẢI TIẾN:** Thêm permission `tabs` cho tab management
+
+### v3.4.0
 - ✨ **MỚI:** Quick Actions Bar - truy cập nhanh 4 tools hay dùng nhất
 - ✨ **MỚI:** Tools Sub-tabs - phân loại tools rõ ràng (Phổ biến, Dev, Testing)
 - ✨ **MỚI:** Quick Actions hoạt động ngay không cần quét trang trước

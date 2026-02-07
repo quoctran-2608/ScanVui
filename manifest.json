@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ScanVui",
-  "version": "3.4.0",
-  "description": "Công cụ all-in-one cho web developers: Quét SEO/Accessibility, chụp ảnh toàn trang, tải website offline, quét media, copy selectors. Quick Actions Bar để truy cập nhanh các tools!",
+  "version": "3.5.0",
+  "description": "Công cụ all-in-one cho web developers: Quét SEO/Accessibility, chụp ảnh toàn trang, tải website offline (hỗ trợ trang cần đăng nhập), quét media, copy selectors!",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -19,6 +19,7 @@
   },
   "permissions": [
     "activeTab",
+    "tabs",
     "scripting",
     "storage",
     "downloads",
