@@ -294,6 +294,18 @@ async function executeCrawler() {
       throw new Error('Không thể tạo tab để crawl: ' + e.message);
     }
 
+    // Re-capture main page on crawler tab with autoFixOverlap
+    try {
+      updateProgress('Đang tối ưu trang chính...', 8);
+      const fixedMain = await getPageHtmlViaTab(crawlerState.crawlerTabId, startUrl, 15000);
+      if (fixedMain && fixedMain.html) {
+        crawlerState.pages[0].html = fixedMain.html;
+        console.log('[ScanVui] Main page re-captured with autoFixOverlap');
+      }
+    } catch (e) {
+      console.log('[ScanVui] Main page autoFix skipped:', e.message);
+    }
+
     // Step 3: Crawl child pages using tab navigation (with auth cookies)
     try {
       while (crawlerState.queue.length > 0) {
@@ -494,6 +506,202 @@ async function getPageHtmlFromTab(tabId) {
   }
 }
 
+async function autoFixOverlap(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        try {
+          let fixCount = 0;
+
+          // Collect all "blocking" elements: fixed, sticky, absolute with z-index
+          const blockers = [];
+          const allEls = document.querySelectorAll('*');
+          for (const el of allEls) {
+            if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'LINK' ||
+                el.tagName === 'META' || el.tagName === 'HEAD' || el.tagName === 'BR' ||
+                el.tagName === 'HR' || el.tagName === 'NOSCRIPT') continue;
+            if (el.id === 'scanvui-toolbar' || el.closest('#scanvui-toolbar')) continue;
+            try {
+              const cs = getComputedStyle(el);
+              const pos = cs.position;
+              if (pos !== 'fixed' && pos !== 'sticky' && pos !== 'absolute') continue;
+              const z = parseInt(cs.zIndex) || 0;
+              const rect = el.getBoundingClientRect();
+              if (rect.width === 0 || rect.height === 0) continue;
+              blockers.push({ el, pos, z, rect, cs });
+            } catch {}
+          }
+
+          // Collect text-containing elements (potential victims)
+          const textSelectors = 'p, h1, h2, h3, h4, h5, h6, li, td, th, dt, dd, blockquote, figcaption, label, span, a';
+          const textEls = document.querySelectorAll(textSelectors);
+          const victims = [];
+          for (const el of textEls) {
+            const text = el.textContent?.trim();
+            if (!text || text.length < 3) continue;
+            if (el.closest('#scanvui-toolbar')) continue;
+            try {
+              const rect = el.getBoundingClientRect();
+              if (rect.width === 0 || rect.height === 0) continue;
+              const cs = getComputedStyle(el);
+              if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+              victims.push({ el, rect });
+            } catch {}
+          }
+
+          // Helper: check if two rects overlap
+          function rectsOverlap(a, b) {
+            return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+          }
+
+          // Helper: overlap area
+          function overlapArea(a, b) {
+            const x = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+            const y = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+            return x * y;
+          }
+
+          // Track which blockers are actually overlapping text
+          const blockerFixMap = new Map();
+
+          for (const blocker of blockers) {
+            let overlappedTextCount = 0;
+            let totalOverlapArea = 0;
+
+            for (const victim of victims) {
+              if (blocker.el.contains(victim.el) || victim.el.contains(blocker.el)) continue;
+              if (!rectsOverlap(blocker.rect, victim.rect)) continue;
+
+              // Check z-index: blocker must visually be on top
+              const victimZ = parseInt(getComputedStyle(victim.el).zIndex) || 0;
+              if (blocker.z <= victimZ && blocker.pos !== 'fixed' && blocker.pos !== 'sticky') continue;
+
+              const area = overlapArea(blocker.rect, victim.rect);
+              const victimArea = victim.rect.width * victim.rect.height;
+              // Only count if significant overlap (>20% of text element)
+              if (victimArea > 0 && (area / victimArea) > 0.2) {
+                overlappedTextCount++;
+                totalOverlapArea += area;
+              }
+            }
+
+            if (overlappedTextCount > 0) {
+              blockerFixMap.set(blocker, { overlappedTextCount, totalOverlapArea });
+            }
+          }
+
+          // Apply fixes to each problematic blocker
+          for (const [blocker, info] of blockerFixMap) {
+            const el = blocker.el;
+            const tag = el.tagName.toLowerCase();
+            const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
+            const id = (el.id || '').toLowerCase();
+            const combined = tag + ' ' + cls + ' ' + id;
+            const w = blocker.rect.width;
+            const h = blocker.rect.height;
+            const viewW = window.innerWidth;
+            const viewH = window.innerHeight;
+
+            // Classify the blocker type
+            const isCookieBanner = /cookie|consent|gdpr|privacy|notice|accept/i.test(combined);
+            const isChatWidget = /chat|intercom|drift|crisp|tawk|zendesk|messenger|livechat|hubspot/i.test(combined);
+            const isAdBanner = /^(ins|amp-ad)$/.test(tag) || /adsbygoogle|ad-container|ad-wrapper|banner-ad|advertisement/i.test(combined);
+            const isOverlay = /overlay|backdrop|modal-backdrop|lightbox-bg/i.test(combined);
+            const isNav = tag === 'nav' || /nav|menu|sidebar|sidenav|drawer/i.test(combined);
+            const isHeader = tag === 'header' || /header|topbar|navbar|app-bar/i.test(combined);
+            const isFooter = tag === 'footer' || /footer|bottom-bar/i.test(combined);
+            const isFloatingBtn = (w < 80 && h < 80) || /fab|float|scroll-top|back-to-top|goto-top/i.test(combined);
+
+            try {
+              if (isCookieBanner || isChatWidget || isAdBanner || isOverlay || isFloatingBtn) {
+                // Remove completely - not part of content
+                el.style.setProperty('display', 'none', 'important');
+                fixCount++;
+              } else if (isNav && blocker.pos === 'fixed') {
+                // Fixed sidebar/nav: hide it, content will expand
+                el.style.setProperty('display', 'none', 'important');
+                fixCount++;
+              } else if (isHeader) {
+                // Fixed/sticky header: make relative so it scrolls with page
+                el.style.setProperty('position', 'relative', 'important');
+                el.style.setProperty('z-index', 'auto', 'important');
+                // Also fix children with position:fixed
+                el.querySelectorAll('*').forEach(child => {
+                  try {
+                    const childCs = getComputedStyle(child);
+                    if (childCs.position === 'fixed' || childCs.position === 'sticky') {
+                      child.style.setProperty('position', 'relative', 'important');
+                      child.style.setProperty('z-index', 'auto', 'important');
+                    }
+                  } catch {}
+                });
+                fixCount++;
+              } else if (isFooter && blocker.pos === 'fixed') {
+                el.style.setProperty('position', 'relative', 'important');
+                fixCount++;
+              } else {
+                // Generic blocker: decide based on size
+                const blockerArea = w * h;
+                const screenArea = viewW * viewH;
+                if (blockerArea > screenArea * 0.5) {
+                  // Full-screen overlay -> hide
+                  el.style.setProperty('display', 'none', 'important');
+                } else if (w < 350 && blocker.pos === 'fixed') {
+                  // Narrow fixed element (sidebar-like) -> hide
+                  el.style.setProperty('display', 'none', 'important');
+                } else if (h < 100 && w > viewW * 0.5 && blocker.pos === 'fixed') {
+                  // Wide short fixed bar (header/banner-like) -> make relative
+                  el.style.setProperty('position', 'relative', 'important');
+                  el.style.setProperty('z-index', 'auto', 'important');
+                } else {
+                  // Other: lower z-index and make relative
+                  el.style.setProperty('position', 'relative', 'important');
+                  el.style.setProperty('z-index', 'auto', 'important');
+                }
+                fixCount++;
+              }
+            } catch {}
+          }
+
+          // After removing fixed sidebars/navs, reset main content margins
+          if (fixCount > 0) {
+            document.querySelectorAll('main, [role="main"], [class*="main-content"], [class*="page-content"], #content, .content, [class*="wrapper"], [class*="container"]').forEach(el => {
+              try {
+                const cs = getComputedStyle(el);
+                const ml = parseInt(cs.marginLeft) || 0;
+                const pl = parseInt(cs.paddingLeft) || 0;
+                // Only reset if there's suspicious left offset (from sidebar)
+                if (ml > 200 || pl > 200) {
+                  el.style.setProperty('margin-left', '0', 'important');
+                  el.style.setProperty('padding-left', '16px', 'important');
+                  el.style.setProperty('width', '100%', 'important');
+                  el.style.setProperty('max-width', '100%', 'important');
+                }
+              } catch {}
+            });
+            // Unlock body scroll if locked
+            document.body.style.setProperty('overflow', 'auto', 'important');
+            document.body.style.setProperty('position', 'static', 'important');
+          }
+
+          return fixCount;
+        } catch (e) {
+          return -1;
+        }
+      }
+    });
+    const fixCount = results?.[0]?.result ?? 0;
+    if (fixCount > 0) {
+      console.log(`[ScanVui] autoFixOverlap: fixed ${fixCount} blocking elements`);
+    }
+    return fixCount;
+  } catch (e) {
+    console.error('[ScanVui] autoFixOverlap error:', e);
+    return 0;
+  }
+}
+
 async function getPageTitle(tabId) {
   try {
     const results = await chrome.scripting.executeScript({
@@ -527,8 +735,10 @@ async function getPageHtmlViaTab(tabId, url, timeoutMs = 15000) {
     };
 
     timer = setTimeout(() => {
-      // Timeout - try to get whatever HTML is available
-      getPageHtmlFromTab(tabId).then(html => {
+      // Timeout - try to fix overlaps and get whatever HTML is available
+      autoFixOverlap(tabId).then(() => {
+        return getPageHtmlFromTab(tabId);
+      }).then(html => {
         if (html) {
           getPageTitle(tabId).then(title => {
             settle({ html, title: title || 'Untitled' });
@@ -542,9 +752,10 @@ async function getPageHtmlViaTab(tabId, url, timeoutMs = 15000) {
     listener = (updatedTabId, changeInfo) => {
       if (updatedTabId !== tabId) return;
       if (changeInfo.status === 'complete') {
-        // Small delay to let JS render
+        // Small delay to let JS render, then fix overlaps, then capture
         setTimeout(async () => {
           try {
+            await autoFixOverlap(tabId);
             const html = await getPageHtmlFromTab(tabId);
             const title = await getPageTitle(tabId);
             settle({ html, title });
@@ -1003,6 +1214,30 @@ document.addEventListener('click', function(e) {
   updateCount();
 })();
 </script>`;
+
+    // Inject backup CSS for offline overlap fix
+    const overlapFixCss = `
+<style id="scanvui-overlap-fix">
+/* ScanVui: backup overlap fix for offline viewing */
+/* Cookie banners, chat widgets, overlays */
+div[class*="cookie" i], div[class*="consent" i], div[class*="gdpr" i],
+div[class*="chat-widget" i], div[class*="intercom" i], div[class*="drift" i],
+div[class*="overlay" i]:not([class*="content" i]), .modal-backdrop,
+div[class*="ad-container" i], div[class*="adsbygoogle" i] {
+  display: none !important;
+}
+/* Fixed navs that are narrow (sidebars) */
+nav[style*="position: fixed"], nav[style*="position:fixed"] {
+  position: relative !important;
+}
+/* Ensure body scrollable */
+body { overflow: auto !important; position: static !important; }
+</style>`;
+    
+    // Insert fix CSS into <head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', overlapFixCss + '</head>');
+    }
     
     // Insert before </body> or at end
     if (html.includes('</body>')) {
