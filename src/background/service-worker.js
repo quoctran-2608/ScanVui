@@ -1033,185 +1033,423 @@ document.addEventListener('click', function(e) {
 });
 </script>`;
 
-    // Inject ScanVui Element Remover toolbar
+    // Inject ScanVui Visual Editor
     const elementRemoverScript = `
-<style id="scanvui-remover-css">
-#scanvui-toolbar{position:fixed;top:10px;right:10px;z-index:2147483647;font-family:Arial,sans-serif;font-size:13px;display:flex;gap:6px;align-items:center;background:#1a1a2e;color:#fff;padding:6px 12px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);user-select:none;cursor:move;opacity:.92;transition:opacity .2s}
-#scanvui-toolbar:hover{opacity:1}
-#scanvui-toolbar button{border:none;padding:5px 10px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
-#scanvui-toolbar .sv-brand{font-weight:700;color:#00d2ff;margin-right:4px;font-size:14px}
-.sv-btn-edit{background:#e94560;color:#fff}.sv-btn-edit:hover{background:#ff6b81}
-.sv-btn-edit.active{background:#00b894;color:#fff}
-.sv-btn-undo{background:#6c5ce7;color:#fff}.sv-btn-undo:hover{background:#a29bfe}
-.sv-btn-save{background:#00b894;color:#fff}.sv-btn-save:hover{background:#55efc4;color:#333}
-.sv-btn-saveas{background:#0984e3;color:#fff}.sv-btn-saveas:hover{background:#74b9ff;color:#333}
-.sv-btn-close{background:transparent;color:#aaa;font-size:16px;padding:2px 6px}.sv-btn-close:hover{color:#fff}
-#scanvui-toolbar .sv-count{color:#ffeaa7;font-size:11px;margin-left:2px}
-.scanvui-hover-outline{outline:2px dashed #e94560!important;outline-offset:-2px;cursor:crosshair!important;background-color:rgba(233,69,96,.08)!important}
-.scanvui-selected{outline:3px solid #e94560!important;outline-offset:-3px;background-color:rgba(233,69,96,.15)!important}
-.scanvui-removing{animation:scanvuiFade .3s ease forwards}
-@keyframes scanvuiFade{to{opacity:0;max-height:0;margin:0;padding:0;overflow:hidden}}
+<style id="scanvui-editor-css">
+#sve{position:fixed;bottom:0;left:0;right:0;z-index:2147483647;font-family:system-ui,-apple-system,sans-serif;font-size:12px;background:#1a1a2e;color:#e0e0e0;box-shadow:0 -4px 24px rgba(0,0,0,.5);user-select:none}
+#sve *{box-sizing:border-box}
+#sve .sve-row{display:flex;align-items:center;gap:4px;padding:5px 10px;flex-wrap:wrap}
+#sve .sve-r2{border-top:1px solid #2d2d50;min-height:34px;display:none}
+#sve .sve-r2.show{display:flex}
+#sve button{border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;color:#e0e0e0;background:#2d2d50;transition:all .12s;white-space:nowrap}
+#sve button:hover{background:#3d3d70}
+#sve button.active{background:#6366f1;color:#fff}
+#sve button.sv-del{background:#e94560}#sve button.sv-del:hover{background:#ff6b81}
+#sve button.sv-save{background:#00b894}#sve button.sv-save:hover{background:#55efc4;color:#333}
+#sve button.sv-saveas{background:#0984e3}#sve button.sv-saveas:hover{background:#74b9ff}
+#sve .sve-brand{font-weight:700;color:#00d2ff;font-size:13px;margin-right:6px}
+#sve .sve-sep{width:1px;height:20px;background:#3d3d60;margin:0 4px}
+#sve .sve-info{color:#a0a0c0;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sve .sve-close{background:none;color:#888;font-size:15px;padding:2px 6px;margin-left:auto}#sve .sve-close:hover{color:#fff}
+#sve .sve-prop{display:flex;align-items:center;gap:3px;margin-right:8px}
+#sve .sve-prop label{color:#a0a0c0;font-size:10px;min-width:18px}
+#sve .sve-prop input[type=number]{width:52px;padding:2px 4px;border:1px solid #3d3d60;border-radius:3px;background:#12122a;color:#e0e0e0;font-size:11px}
+#sve .sve-prop input[type=color]{width:24px;height:22px;padding:0;border:1px solid #3d3d60;border-radius:3px;cursor:pointer;background:none}
+#sve .sve-prop select{padding:2px 4px;border:1px solid #3d3d60;border-radius:3px;background:#12122a;color:#e0e0e0;font-size:11px}
+#sve .sve-prop input[type=range]{width:60px;height:14px;cursor:pointer}
+.sve-outline{outline:2px dashed #6366f1!important;outline-offset:-2px}
+.sve-selected{outline:2px solid #e94560!important;outline-offset:-1px}
+.sve-hidden-by-editor{opacity:.25!important;outline:2px dashed #f59e0b!important}
+.sve-handle{position:absolute;width:8px;height:8px;background:#e94560;border:1px solid #fff;z-index:2147483646;pointer-events:auto}
+.sve-handle-tl{cursor:nw-resize}.sve-handle-tc{cursor:n-resize}.sve-handle-tr{cursor:ne-resize}
+.sve-handle-ml{cursor:w-resize}.sve-handle-mr{cursor:e-resize}
+.sve-handle-bl{cursor:sw-resize}.sve-handle-bc{cursor:s-resize}.sve-handle-br{cursor:se-resize}
+.sve-moving{cursor:move!important}
+.sve-editing{outline:2px solid #00b894!important;min-height:1em}
 </style>
-<div id="scanvui-toolbar">
-<span class="sv-brand">ScanVui</span>
-<button class="sv-btn-edit" id="svEditBtn" title="Bat/Tat che do xoa phan tu">&#9986; Chinh sua</button>
-<button class="sv-btn-undo" id="svUndoBtn" title="Hoan tac thao tac cuoi" style="display:none">&#8630; Hoan tac</button>
-<span class="sv-count" id="svCount"></span>
-<button class="sv-btn-save" id="svSaveBtn" title="Luu de len file goc (cung ten)" style="display:none">&#128190; Luu</button>
-<button class="sv-btn-saveas" id="svSaveAsBtn" title="Luu thanh file moi" style="display:none">&#128196; Luu moi</button>
-<button class="sv-btn-close" id="svCloseBtn" title="Dong toolbar">&#10005;</button>
+<div id="sve">
+<div class="sve-row">
+<span class="sve-brand">ScanVui Editor</span>
+<div class="sve-sep"></div>
+<button id="sveSelect" class="active" title="Chon phan tu (S)">&#9654; Chon</button>
+<button id="sveMove" title="Di chuyen (M)">&#9995; Di chuyen</button>
+<button id="sveResize" title="Thay doi kich thuoc (R)">&#10697; Resize</button>
+<div class="sve-sep"></div>
+<button id="sveDel" class="sv-del" title="Xoa phan tu (Delete)">&#128465; Xoa</button>
+<button id="sveHide" title="An/hien phan tu (H)">&#128065; An</button>
+<button id="sveEdit" title="Sua text (double-click) (E)">&#9998; Sua text</button>
+<div class="sve-sep"></div>
+<button id="sveUndo" title="Hoan tac (Ctrl+Z)">&#8630; Undo</button>
+<button id="sveRedo" title="Lam lai (Ctrl+Shift+Z)">&#8631; Redo</button>
+<span class="sve-info" id="sveInfo">Click phan tu de chon</span>
+<div class="sve-sep"></div>
+<button id="sveSave" class="sv-save" title="Luu file goc">&#128190; Luu</button>
+<button id="sveSaveAs" class="sv-saveas" title="Luu file moi">&#128196; Luu moi</button>
+<button id="sveClose" class="sve-close" title="Dong editor">&#10005;</button>
+</div>
+<div class="sve-r2" id="sveProps">
+<div class="sve-prop"><label>W</label><input type="number" id="svePW" min="0" step="1"></div>
+<div class="sve-prop"><label>H</label><input type="number" id="svePH" min="0" step="1"></div>
+<div class="sve-prop"><label>Z</label><input type="number" id="svePZ" step="1"></div>
+<div class="sve-prop"><label title="Opacity">Op</label><input type="range" id="svePO" min="0" max="1" step="0.05"></div>
+<div class="sve-prop"><label title="Font size">Fs</label><input type="number" id="svePFs" min="0" step="1"></div>
+<div class="sve-prop"><label title="Mau nen">Bg</label><input type="color" id="svePBg"></div>
+<div class="sve-prop"><label title="Mau chu">Cl</label><input type="color" id="svePCl"></div>
+<div class="sve-prop"><label>Dp</label><select id="svePDp"><option value="">--</option><option>block</option><option>flex</option><option>inline</option><option>inline-block</option><option>grid</option><option>none</option></select></div>
+<div class="sve-prop"><label>Ps</label><select id="svePPs"><option value="">--</option><option>static</option><option>relative</option><option>absolute</option><option>fixed</option><option>sticky</option></select></div>
+</div>
 </div>
 <script>
 (function(){
-  var toolbar=document.getElementById('scanvui-toolbar');
-  if(!toolbar)return;
-  var editBtn=document.getElementById('svEditBtn');
-  var undoBtn=document.getElementById('svUndoBtn');
-  var saveBtn=document.getElementById('svSaveBtn');
-  var saveAsBtn=document.getElementById('svSaveAsBtn');
-  var countEl=document.getElementById('svCount');
-  var closeBtn=document.getElementById('svCloseBtn');
-  var editing=false;
-  var history=[];
-  var hoveredEl=null;
+var E=document.getElementById('sve');if(!E)return;
+var mode='select',sel=null,handles=[],undoStack=[],redoStack=[],changed=false;
+var $=function(id){return document.getElementById(id)};
+var btnSel=$('sveSelect'),btnMov=$('sveMove'),btnRes=$('sveResize');
+var btnDel=$('sveDel'),btnHide=$('sveHide'),btnEdit=$('sveEdit');
+var btnUndo=$('sveUndo'),btnRedo=$('sveRedo');
+var btnSave=$('sveSave'),btnSaveAs=$('sveSaveAs'),btnClose=$('sveClose');
+var info=$('sveInfo'),propsRow=$('sveProps');
+var pW=$('svePW'),pH=$('svePH'),pZ=$('svePZ'),pO=$('svePO');
+var pFs=$('svePFs'),pBg=$('svePBg'),pCl=$('svePCl'),pDp=$('svePDp'),pPs=$('svePPs');
 
-  // Draggable toolbar
-  var dragging=false,dx=0,dy=0;
-  toolbar.addEventListener('mousedown',function(e){
-    if(e.target.tagName==='BUTTON')return;
-    dragging=true;dx=e.clientX-toolbar.offsetLeft;dy=e.clientY-toolbar.offsetTop;
-  });
-  document.addEventListener('mousemove',function(e){
-    if(!dragging)return;
-    toolbar.style.right='auto';toolbar.style.left=(e.clientX-dx)+'px';toolbar.style.top=(e.clientY-dy)+'px';
-  });
-  document.addEventListener('mouseup',function(){dragging=false});
+function isEd(el){return el&&(el.id==='sve'||el.closest('#sve')||el.classList.contains('sve-handle'))}
+function desc(el){if(!el)return'';var t=el.tagName.toLowerCase(),i=el.id?'#'+el.id:'',c=typeof el.className==='string'?'.'+el.className.split(' ').filter(function(x){return x&&!x.startsWith('sve')}).slice(0,2).join('.'):'';return t+i+c}
 
-  function updateCount(){
-    var n=history.length;
-    countEl.textContent=n?'('+n+' da xoa)':'';
-    undoBtn.style.display=n?'inline-block':'none';
-    saveBtn.style.display=n?'inline-block':'none';
-    saveAsBtn.style.display=n?'inline-block':'none';
+// Mode switching
+function setMode(m){mode=m;
+btnSel.classList.toggle('active',m==='select');
+btnMov.classList.toggle('active',m==='move');
+btnRes.classList.toggle('active',m==='resize');
+document.body.style.cursor=m==='move'?'move':m==='resize'?'crosshair':'';
+if(m!=='resize')removeHandles();
+if(m==='resize'&&sel)showHandles(sel);
+}
+btnSel.onclick=function(){setMode('select')};
+btnMov.onclick=function(){setMode('move')};
+btnRes.onclick=function(){setMode('resize')};
+
+// Select element
+function selectEl(el){
+if(sel)sel.classList.remove('sve-selected');
+sel=el;
+if(!sel){info.textContent='Click phan tu de chon';propsRow.classList.remove('show');removeHandles();return}
+sel.classList.add('sve-selected');
+var r=sel.getBoundingClientRect();
+info.textContent=desc(sel)+' | '+Math.round(r.width)+'x'+Math.round(r.height);
+propsRow.classList.add('show');
+syncProps();
+if(mode==='resize')showHandles(sel);
+}
+
+// Sync property panel with selected element
+function syncProps(){
+if(!sel)return;
+var cs=getComputedStyle(sel);
+pW.value=Math.round(sel.offsetWidth);
+pH.value=Math.round(sel.offsetHeight);
+pZ.value=parseInt(cs.zIndex)||0;
+pO.value=parseFloat(cs.opacity)||1;
+pFs.value=parseInt(cs.fontSize)||14;
+pBg.value=rgbToHex(cs.backgroundColor);
+pCl.value=rgbToHex(cs.color);
+pDp.value=cs.display;
+pPs.value=cs.position;
+}
+function rgbToHex(rgb){if(!rgb||rgb==='transparent'||rgb.startsWith('#'))return rgb||'#ffffff';
+var m=rgb.match(/\\d+/g);if(!m||m.length<3)return'#ffffff';
+return'#'+((1<<24)+(+m[0]<<16)+(+m[1]<<8)+ +m[2]).toString(16).slice(1)}
+
+// Record change for undo
+function rec(el,prop,oldV,newV,type){
+undoStack.push({el:el,prop:prop,oldV:oldV,newV:newV,type:type||'style'});
+redoStack=[];changed=true;
+}
+
+// Apply style with undo recording
+function applyStyle(prop,val){
+if(!sel)return;
+var old=sel.style.getPropertyValue(prop);
+sel.style.setProperty(prop,val,'important');
+rec(sel,prop,old,val);
+syncProps();
+}
+
+// Property inputs
+pW.onchange=function(){if(sel)applyStyle('width',pW.value+'px')};
+pH.onchange=function(){if(sel)applyStyle('height',pH.value+'px')};
+pZ.onchange=function(){if(sel)applyStyle('z-index',pZ.value)};
+pO.oninput=function(){if(sel)applyStyle('opacity',pO.value)};
+pFs.onchange=function(){if(sel)applyStyle('font-size',pFs.value+'px')};
+pBg.oninput=function(){if(sel)applyStyle('background-color',pBg.value)};
+pCl.oninput=function(){if(sel)applyStyle('color',pCl.value)};
+pDp.onchange=function(){if(sel&&pDp.value)applyStyle('display',pDp.value)};
+pPs.onchange=function(){if(sel&&pPs.value)applyStyle('position',pPs.value)};
+
+// Hover outline
+var hovered=null;
+document.addEventListener('mouseover',function(e){
+if(!mode||isEd(e.target))return;
+if(hovered)hovered.classList.remove('sve-outline');
+hovered=e.target;hovered.classList.add('sve-outline');
+},true);
+document.addEventListener('mouseout',function(e){
+if(hovered)hovered.classList.remove('sve-outline');hovered=null;
+},true);
+
+// Click to select
+document.addEventListener('click',function(e){
+if(isEd(e.target))return;
+if(!mode)return;
+e.preventDefault();e.stopPropagation();
+var el=e.target;
+if(!el||el===document.body||el===document.documentElement)return;
+el.classList.remove('sve-outline');
+selectEl(el);
+},true);
+
+// === MOVE (drag & drop) ===
+var moveData=null;
+document.addEventListener('mousedown',function(e){
+if(mode!=='move'||isEd(e.target)||!sel)return;
+var el=e.target;
+if(!sel.contains(el)&&el!==sel)return;
+e.preventDefault();
+var cs=getComputedStyle(sel);
+if(cs.position==='static'){
+  var oldPos=sel.style.getPropertyValue('position');
+  sel.style.setProperty('position','relative','important');
+  rec(sel,'position',oldPos,'relative');
+}
+var rect=sel.getBoundingClientRect();
+moveData={startX:e.clientX,startY:e.clientY,origLeft:parseInt(sel.style.left)||0,origTop:parseInt(sel.style.top)||0,
+  oldLeft:sel.style.getPropertyValue('left'),oldTop:sel.style.getPropertyValue('top')};
+sel.classList.add('sve-moving');
+},true);
+document.addEventListener('mousemove',function(e){
+if(!moveData||!sel)return;
+var dx=e.clientX-moveData.startX,dy=e.clientY-moveData.startY;
+sel.style.setProperty('left',(moveData.origLeft+dx)+'px','important');
+sel.style.setProperty('top',(moveData.origTop+dy)+'px','important');
+});
+document.addEventListener('mouseup',function(){
+if(!moveData||!sel)return;
+sel.classList.remove('sve-moving');
+rec(sel,'left',moveData.oldLeft,sel.style.getPropertyValue('left'));
+rec(sel,'top',moveData.oldTop,sel.style.getPropertyValue('top'));
+moveData=null;syncProps();
+});
+
+// === RESIZE (8 handles) ===
+var resizeData=null;
+function removeHandles(){handles.forEach(function(h){h.remove()});handles=[]}
+function showHandles(el){
+removeHandles();
+var positions=['tl','tc','tr','ml','mr','bl','bc','br'];
+positions.forEach(function(p){
+  var h=document.createElement('div');
+  h.className='sve-handle sve-handle-'+p;
+  h.dataset.pos=p;
+  document.body.appendChild(h);
+  handles.push(h);
+  posHandle(h,p,el);
+  h.addEventListener('mousedown',function(e){startResize(e,p,el)});
+});
+}
+function posHandle(h,p,el){
+var r=el.getBoundingClientRect(),s=window.scrollY,sx=window.scrollX;
+var positions={
+  tl:{left:r.left+sx-4,top:r.top+s-4},tc:{left:r.left+sx+r.width/2-4,top:r.top+s-4},
+  tr:{left:r.right+sx-4,top:r.top+s-4},ml:{left:r.left+sx-4,top:r.top+s+r.height/2-4},
+  mr:{left:r.right+sx-4,top:r.top+s+r.height/2-4},bl:{left:r.left+sx-4,top:r.bottom+s-4},
+  bc:{left:r.left+sx+r.width/2-4,top:r.bottom+s-4},br:{left:r.right+sx-4,top:r.bottom+s-4}
+};
+var pos=positions[p];
+h.style.cssText='position:absolute;left:'+pos.left+'px;top:'+pos.top+'px;width:8px;height:8px;background:#e94560;border:1px solid #fff;z-index:2147483646;pointer-events:auto;cursor:'+getComputedStyle(h).cursor;
+}
+function startResize(e,pos,el){
+e.preventDefault();e.stopPropagation();
+var r=el.getBoundingClientRect();
+resizeData={pos:pos,el:el,startX:e.clientX,startY:e.clientY,startW:r.width,startH:r.height,
+  startL:parseInt(el.style.left)||0,startT:parseInt(el.style.top)||0,
+  oldW:el.style.getPropertyValue('width'),oldH:el.style.getPropertyValue('height'),
+  oldL:el.style.getPropertyValue('left'),oldT:el.style.getPropertyValue('top')};
+}
+document.addEventListener('mousemove',function(e){
+if(!resizeData)return;
+var d=resizeData,dx=e.clientX-d.startX,dy=e.clientY-d.startY,p=d.pos;
+var nw=d.startW,nh=d.startH,nl=d.startL,nt=d.startT;
+if(p.includes('r'))nw=Math.max(20,d.startW+dx);
+if(p.includes('l')){nw=Math.max(20,d.startW-dx);nl=d.startL+dx}
+if(p.includes('b'))nh=Math.max(20,d.startH+dy);
+if(p.includes('t')){nh=Math.max(20,d.startH-dy);nt=d.startT+dy}
+d.el.style.setProperty('width',nw+'px','important');
+d.el.style.setProperty('height',nh+'px','important');
+if(p.includes('l'))d.el.style.setProperty('left',nl+'px','important');
+if(p.includes('t'))d.el.style.setProperty('top',nt+'px','important');
+handles.forEach(function(h){posHandle(h,h.dataset.pos,d.el)});
+});
+document.addEventListener('mouseup',function(){
+if(!resizeData)return;
+var d=resizeData;
+rec(d.el,'width',d.oldW,d.el.style.getPropertyValue('width'));
+rec(d.el,'height',d.oldH,d.el.style.getPropertyValue('height'));
+if(d.pos.includes('l'))rec(d.el,'left',d.oldL,d.el.style.getPropertyValue('left'));
+if(d.pos.includes('t'))rec(d.el,'top',d.oldT,d.el.style.getPropertyValue('top'));
+resizeData=null;syncProps();
+});
+
+// === DELETE ===
+btnDel.onclick=function(){
+if(!sel)return;
+var el=sel,parent=el.parentNode,next=el.nextSibling;
+var oldHtml=el.outerHTML;
+rec(el,'__delete',{parent:parent,next:next,html:oldHtml},null,'delete');
+selectEl(null);
+el.remove();changed=true;
+};
+
+// === HIDE/SHOW ===
+btnHide.onclick=function(){
+if(!sel)return;
+var isHidden=sel.classList.contains('sve-hidden-by-editor');
+if(isHidden){
+  sel.classList.remove('sve-hidden-by-editor');
+  var old=sel.style.getPropertyValue('display');
+  sel.style.removeProperty('display');
+  rec(sel,'__visibility',old,'visible','visibility');
+}else{
+  sel.classList.add('sve-hidden-by-editor');
+  rec(sel,'__visibility','visible',sel.style.getPropertyValue('display'),'visibility');
+}
+};
+
+// === EDIT TEXT (double-click) ===
+var editingEl=null;
+btnEdit.onclick=function(){
+if(!sel)return;
+if(editingEl){finishEdit();return}
+var old=sel.innerHTML;
+sel.contentEditable='true';
+sel.classList.add('sve-editing');
+sel.focus();
+editingEl={el:sel,oldHtml:old};
+btnEdit.classList.add('active');
+info.textContent='Dang sua text... Click "Sua text" de ket thuc';
+};
+function finishEdit(){
+if(!editingEl)return;
+editingEl.el.contentEditable='false';
+editingEl.el.classList.remove('sve-editing');
+var newHtml=editingEl.el.innerHTML;
+if(newHtml!==editingEl.oldHtml){
+  rec(editingEl.el,'innerHTML',editingEl.oldHtml,newHtml,'html');
+  changed=true;
+}
+btnEdit.classList.remove('active');
+editingEl=null;
+if(sel)info.textContent=desc(sel);
+}
+document.addEventListener('dblclick',function(e){
+if(isEd(e.target)||mode!=='select')return;
+if(sel&&sel.contains(e.target)){
+  e.preventDefault();
+  btnEdit.onclick();
+}
+},true);
+
+// === UNDO / REDO ===
+function doUndo(){
+if(!undoStack.length)return;
+var a=undoStack.pop();redoStack.push(a);
+if(a.type==='delete'){
+  if(a.oldV&&a.oldV.parent){
+    var tmp=document.createElement('div');tmp.innerHTML=a.oldV.html;
+    var restored=tmp.firstChild;
+    if(a.oldV.next)a.oldV.parent.insertBefore(restored,a.oldV.next);
+    else a.oldV.parent.appendChild(restored);
+    a.el=restored;
   }
+}else if(a.type==='html'){
+  a.el.innerHTML=a.oldV;
+}else if(a.type==='visibility'){
+  a.el.classList.remove('sve-hidden-by-editor');
+  if(a.oldV)a.el.style.setProperty('display',a.oldV,'important');
+  else a.el.style.removeProperty('display');
+}else{
+  if(a.oldV)a.el.style.setProperty(a.prop,a.oldV,'important');
+  else a.el.style.removeProperty(a.prop);
+}
+if(sel)syncProps();
+}
+function doRedo(){
+if(!redoStack.length)return;
+var a=redoStack.pop();undoStack.push(a);
+if(a.type==='delete'){a.el.remove();}
+else if(a.type==='html'){a.el.innerHTML=a.newV;}
+else if(a.type==='visibility'){a.el.classList.add('sve-hidden-by-editor');}
+else{if(a.newV)a.el.style.setProperty(a.prop,a.newV,'important');else a.el.style.removeProperty(a.prop)}
+if(sel)syncProps();
+}
+btnUndo.onclick=doUndo;
+btnRedo.onclick=doRedo;
 
-  function isToolbar(el){
-    return el&&(el.id==='scanvui-toolbar'||el.closest('#scanvui-toolbar'));
-  }
+// === KEYBOARD SHORTCUTS ===
+document.addEventListener('keydown',function(e){
+if(editingEl)return;
+if(e.key==='Escape'){selectEl(null);return}
+if(e.key==='Delete'&&sel){btnDel.onclick();return}
+if(e.key==='s'||e.key==='S'){if(!e.ctrlKey){setMode('select');e.preventDefault()}}
+if(e.key==='m'||e.key==='M'){if(!e.ctrlKey){setMode('move');e.preventDefault()}}
+if(e.key==='r'||e.key==='R'){if(!e.ctrlKey){setMode('resize');e.preventDefault()}}
+if(e.key==='h'||e.key==='H'){if(!e.ctrlKey&&sel){btnHide.onclick();e.preventDefault()}}
+if(e.key==='e'||e.key==='E'){if(!e.ctrlKey&&sel){btnEdit.onclick();e.preventDefault()}}
+if(e.key==='z'&&e.ctrlKey&&!e.shiftKey){doUndo();e.preventDefault()}
+if(e.key==='z'&&e.ctrlKey&&e.shiftKey){doRedo();e.preventDefault()}
+if(e.key==='Z'&&e.ctrlKey){doRedo();e.preventDefault()}
+});
 
-  function onHover(e){
-    if(!editing||isToolbar(e.target))return;
-    if(hoveredEl)hoveredEl.classList.remove('scanvui-hover-outline');
-    hoveredEl=e.target;
-    hoveredEl.classList.add('scanvui-hover-outline');
-  }
-  function onLeave(e){
-    if(!editing)return;
-    if(hoveredEl)hoveredEl.classList.remove('scanvui-hover-outline');
-    hoveredEl=null;
-  }
-  function onClick(e){
-    if(!editing||isToolbar(e.target))return;
-    e.preventDefault();e.stopPropagation();
-    var el=e.target;
-    if(!el||el===document.body||el===document.documentElement)return;
-    el.classList.remove('scanvui-hover-outline');
-    el.classList.add('scanvui-selected');
-    // Confirm
-    var tag=el.tagName.toLowerCase();
-    var id=el.id?'#'+el.id:'';
-    var cls=el.className?'.'+String(el.className).split(' ').filter(function(c){return c&&!c.startsWith('scanvui')}).slice(0,2).join('.'):'';
-    var txt=(el.textContent||'').substring(0,40).trim();
-    var desc=tag+id+cls+(txt?' "'+txt+'..."':'');
-    if(confirm('Xoa phan tu nay?\\n'+desc)){
-      el.classList.remove('scanvui-selected');
-      el.classList.add('scanvui-removing');
-      var parent=el.parentNode;
-      var next=el.nextSibling;
-      history.push({el:el,parent:parent,next:next});
-      setTimeout(function(){el.remove();updateCount()},300);
-    }else{
-      el.classList.remove('scanvui-selected');
-    }
-  }
-
-  editBtn.addEventListener('click',function(){
-    editing=!editing;
-    editBtn.textContent=editing?'\\u2714 Dang chinh sua':'\\u2702 Chinh sua';
-    editBtn.classList.toggle('active',editing);
-    document.body.style.cursor=editing?'crosshair':'';
-    if(!editing&&hoveredEl){hoveredEl.classList.remove('scanvui-hover-outline');hoveredEl=null}
-  });
-
-  undoBtn.addEventListener('click',function(){
-    if(!history.length)return;
-    var item=history.pop();
-    if(item.parent){
-      item.el.classList.remove('scanvui-removing');
-      item.el.style.opacity='';item.el.style.maxHeight='';item.el.style.margin='';item.el.style.padding='';item.el.style.overflow='';
-      if(item.next)item.parent.insertBefore(item.el,item.next);
-      else item.parent.appendChild(item.el);
-    }
-    updateCount();
-  });
-
-  function getCleanHtml(){
-    // Temporarily hide toolbar and remove scanvui classes
-    toolbar.style.display='none';
-    var css=document.getElementById('scanvui-remover-css');
-    if(css)css.remove();
-    // Remove all scanvui classes from elements
-    document.querySelectorAll('.scanvui-hover-outline,.scanvui-selected,.scanvui-removing').forEach(function(el){
-      el.classList.remove('scanvui-hover-outline','scanvui-selected','scanvui-removing');
-    });
-    var html='<!DOCTYPE html>\\n'+document.documentElement.outerHTML;
-    // Restore toolbar
-    document.body.appendChild(toolbar);
-    toolbar.style.display='';
-    if(css)document.head.appendChild(css);
-    return html;
-  }
-
-  function downloadHtml(html,filename){
-    var blob=new Blob([html],{type:'text/html;charset=utf-8'});
-    var a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download=filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  saveBtn.addEventListener('click',function(){
-    var html=getCleanHtml();
-    var filename=location.pathname.split('/').pop()||'index.html';
-    downloadHtml(html,filename);
-  });
-
-  saveAsBtn.addEventListener('click',function(){
-    var base=location.pathname.split('/').pop()||'page';
-    base=base.replace(/\\.html$/i,'');
-    var name=prompt('Ten file moi:',base+'_edited.html');
-    if(!name)return;
-    if(!name.endsWith('.html'))name+='.html';
-    var html=getCleanHtml();
-    downloadHtml(html,name);
-  });
-
-  closeBtn.addEventListener('click',function(){
-    if(history.length&&!confirm('Ban da xoa '+history.length+' phan tu. Dong toolbar se mat thay doi chua luu. Tiep tuc?'))return;
-    toolbar.remove();
-    var css=document.getElementById('scanvui-remover-css');
-    if(css)css.remove();
-    document.body.style.cursor='';
-    document.removeEventListener('mouseover',onHover,true);
-    document.removeEventListener('mouseout',onLeave,true);
-    document.removeEventListener('click',onClick,true);
-  });
-
-  document.addEventListener('mouseover',onHover,true);
-  document.addEventListener('mouseout',onLeave,true);
-  document.addEventListener('click',onClick,true);
-  updateCount();
+// === SAVE ===
+function getCleanHtml(){
+if(editingEl)finishEdit();
+selectEl(null);removeHandles();
+E.style.display='none';
+var css=document.getElementById('scanvui-editor-css');
+var cssHtml=css?css.outerHTML:'';
+if(css)css.remove();
+document.querySelectorAll('.sve-outline,.sve-selected,.sve-moving,.sve-editing,.sve-hidden-by-editor,.sve-handle').forEach(function(el){
+  el.classList.remove('sve-outline','sve-selected','sve-moving','sve-editing');
+  if(el.classList.contains('sve-handle'))el.remove();
+  if(el.classList.contains('sve-hidden-by-editor')){el.classList.remove('sve-hidden-by-editor')}
+});
+document.querySelectorAll('[contenteditable]').forEach(function(el){el.removeAttribute('contenteditable')});
+var html='<!DOCTYPE html>\\n'+document.documentElement.outerHTML;
+document.body.appendChild(E);
+E.style.display='';
+if(cssHtml){var t=document.createElement('div');t.innerHTML=cssHtml;if(t.firstChild)document.head.appendChild(t.firstChild)}
+return html;
+}
+function downloadHtml(html,fn){
+var b=new Blob([html],{type:'text/html;charset=utf-8'});
+var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fn;a.click();URL.revokeObjectURL(a.href);
+}
+btnSave.onclick=function(){
+var html=getCleanHtml();
+var fn=location.pathname.split('/').pop()||'index.html';
+downloadHtml(html,fn);changed=false;
+};
+btnSaveAs.onclick=function(){
+var base=location.pathname.split('/').pop()||'page';
+base=base.replace(/\\.html$/i,'');
+var name=prompt('Ten file moi:',base+'_edited.html');
+if(!name)return;if(!name.endsWith('.html'))name+='.html';
+downloadHtml(getCleanHtml(),name);changed=false;
+};
+btnClose.onclick=function(){
+if(changed&&!confirm('Co thay doi chua luu. Dong editor?'))return;
+if(editingEl)finishEdit();selectEl(null);removeHandles();
+E.remove();var css=document.getElementById('scanvui-editor-css');if(css)css.remove();
+document.body.style.cursor='';
+};
 })();
 </script>`;
 
