@@ -1401,6 +1401,18 @@ summary:focus-visible {
   grid-column: 1 / -1;
 }
 
+.crawler-features-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  margin-bottom: 10px;
+}
+
 .crawler-simple-settings {
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
