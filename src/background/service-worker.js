@@ -821,12 +821,194 @@ document.addEventListener('click', function(e) {
   }
 });
 </script>`;
+
+    // Inject ScanVui Element Remover toolbar
+    const elementRemoverScript = `
+<style id="scanvui-remover-css">
+#scanvui-toolbar{position:fixed;top:10px;right:10px;z-index:2147483647;font-family:Arial,sans-serif;font-size:13px;display:flex;gap:6px;align-items:center;background:#1a1a2e;color:#fff;padding:6px 12px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);user-select:none;cursor:move;opacity:.92;transition:opacity .2s}
+#scanvui-toolbar:hover{opacity:1}
+#scanvui-toolbar button{border:none;padding:5px 10px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+#scanvui-toolbar .sv-brand{font-weight:700;color:#00d2ff;margin-right:4px;font-size:14px}
+.sv-btn-edit{background:#e94560;color:#fff}.sv-btn-edit:hover{background:#ff6b81}
+.sv-btn-edit.active{background:#00b894;color:#fff}
+.sv-btn-undo{background:#6c5ce7;color:#fff}.sv-btn-undo:hover{background:#a29bfe}
+.sv-btn-save{background:#00b894;color:#fff}.sv-btn-save:hover{background:#55efc4;color:#333}
+.sv-btn-saveas{background:#0984e3;color:#fff}.sv-btn-saveas:hover{background:#74b9ff;color:#333}
+.sv-btn-close{background:transparent;color:#aaa;font-size:16px;padding:2px 6px}.sv-btn-close:hover{color:#fff}
+#scanvui-toolbar .sv-count{color:#ffeaa7;font-size:11px;margin-left:2px}
+.scanvui-hover-outline{outline:2px dashed #e94560!important;outline-offset:-2px;cursor:crosshair!important;background-color:rgba(233,69,96,.08)!important}
+.scanvui-selected{outline:3px solid #e94560!important;outline-offset:-3px;background-color:rgba(233,69,96,.15)!important}
+.scanvui-removing{animation:scanvuiFade .3s ease forwards}
+@keyframes scanvuiFade{to{opacity:0;max-height:0;margin:0;padding:0;overflow:hidden}}
+</style>
+<div id="scanvui-toolbar">
+<span class="sv-brand">ScanVui</span>
+<button class="sv-btn-edit" id="svEditBtn" title="Bat/Tat che do xoa phan tu">&#9986; Chinh sua</button>
+<button class="sv-btn-undo" id="svUndoBtn" title="Hoan tac thao tac cuoi" style="display:none">&#8630; Hoan tac</button>
+<span class="sv-count" id="svCount"></span>
+<button class="sv-btn-save" id="svSaveBtn" title="Luu de len file goc (cung ten)" style="display:none">&#128190; Luu</button>
+<button class="sv-btn-saveas" id="svSaveAsBtn" title="Luu thanh file moi" style="display:none">&#128196; Luu moi</button>
+<button class="sv-btn-close" id="svCloseBtn" title="Dong toolbar">&#10005;</button>
+</div>
+<script>
+(function(){
+  var toolbar=document.getElementById('scanvui-toolbar');
+  if(!toolbar)return;
+  var editBtn=document.getElementById('svEditBtn');
+  var undoBtn=document.getElementById('svUndoBtn');
+  var saveBtn=document.getElementById('svSaveBtn');
+  var saveAsBtn=document.getElementById('svSaveAsBtn');
+  var countEl=document.getElementById('svCount');
+  var closeBtn=document.getElementById('svCloseBtn');
+  var editing=false;
+  var history=[];
+  var hoveredEl=null;
+
+  // Draggable toolbar
+  var dragging=false,dx=0,dy=0;
+  toolbar.addEventListener('mousedown',function(e){
+    if(e.target.tagName==='BUTTON')return;
+    dragging=true;dx=e.clientX-toolbar.offsetLeft;dy=e.clientY-toolbar.offsetTop;
+  });
+  document.addEventListener('mousemove',function(e){
+    if(!dragging)return;
+    toolbar.style.right='auto';toolbar.style.left=(e.clientX-dx)+'px';toolbar.style.top=(e.clientY-dy)+'px';
+  });
+  document.addEventListener('mouseup',function(){dragging=false});
+
+  function updateCount(){
+    var n=history.length;
+    countEl.textContent=n?'('+n+' da xoa)':'';
+    undoBtn.style.display=n?'inline-block':'none';
+    saveBtn.style.display=n?'inline-block':'none';
+    saveAsBtn.style.display=n?'inline-block':'none';
+  }
+
+  function isToolbar(el){
+    return el&&(el.id==='scanvui-toolbar'||el.closest('#scanvui-toolbar'));
+  }
+
+  function onHover(e){
+    if(!editing||isToolbar(e.target))return;
+    if(hoveredEl)hoveredEl.classList.remove('scanvui-hover-outline');
+    hoveredEl=e.target;
+    hoveredEl.classList.add('scanvui-hover-outline');
+  }
+  function onLeave(e){
+    if(!editing)return;
+    if(hoveredEl)hoveredEl.classList.remove('scanvui-hover-outline');
+    hoveredEl=null;
+  }
+  function onClick(e){
+    if(!editing||isToolbar(e.target))return;
+    e.preventDefault();e.stopPropagation();
+    var el=e.target;
+    if(!el||el===document.body||el===document.documentElement)return;
+    el.classList.remove('scanvui-hover-outline');
+    el.classList.add('scanvui-selected');
+    // Confirm
+    var tag=el.tagName.toLowerCase();
+    var id=el.id?'#'+el.id:'';
+    var cls=el.className?'.'+String(el.className).split(' ').filter(function(c){return c&&!c.startsWith('scanvui')}).slice(0,2).join('.'):'';
+    var txt=(el.textContent||'').substring(0,40).trim();
+    var desc=tag+id+cls+(txt?' "'+txt+'..."':'');
+    if(confirm('Xoa phan tu nay?\\n'+desc)){
+      el.classList.remove('scanvui-selected');
+      el.classList.add('scanvui-removing');
+      var parent=el.parentNode;
+      var next=el.nextSibling;
+      history.push({el:el,parent:parent,next:next});
+      setTimeout(function(){el.remove();updateCount()},300);
+    }else{
+      el.classList.remove('scanvui-selected');
+    }
+  }
+
+  editBtn.addEventListener('click',function(){
+    editing=!editing;
+    editBtn.textContent=editing?'\\u2714 Dang chinh sua':'\\u2702 Chinh sua';
+    editBtn.classList.toggle('active',editing);
+    document.body.style.cursor=editing?'crosshair':'';
+    if(!editing&&hoveredEl){hoveredEl.classList.remove('scanvui-hover-outline');hoveredEl=null}
+  });
+
+  undoBtn.addEventListener('click',function(){
+    if(!history.length)return;
+    var item=history.pop();
+    if(item.parent){
+      item.el.classList.remove('scanvui-removing');
+      item.el.style.opacity='';item.el.style.maxHeight='';item.el.style.margin='';item.el.style.padding='';item.el.style.overflow='';
+      if(item.next)item.parent.insertBefore(item.el,item.next);
+      else item.parent.appendChild(item.el);
+    }
+    updateCount();
+  });
+
+  function getCleanHtml(){
+    // Temporarily hide toolbar and remove scanvui classes
+    toolbar.style.display='none';
+    var css=document.getElementById('scanvui-remover-css');
+    if(css)css.remove();
+    // Remove all scanvui classes from elements
+    document.querySelectorAll('.scanvui-hover-outline,.scanvui-selected,.scanvui-removing').forEach(function(el){
+      el.classList.remove('scanvui-hover-outline','scanvui-selected','scanvui-removing');
+    });
+    var html='<!DOCTYPE html>\\n'+document.documentElement.outerHTML;
+    // Restore toolbar
+    document.body.appendChild(toolbar);
+    toolbar.style.display='';
+    if(css)document.head.appendChild(css);
+    return html;
+  }
+
+  function downloadHtml(html,filename){
+    var blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  saveBtn.addEventListener('click',function(){
+    var html=getCleanHtml();
+    var filename=location.pathname.split('/').pop()||'index.html';
+    downloadHtml(html,filename);
+  });
+
+  saveAsBtn.addEventListener('click',function(){
+    var base=location.pathname.split('/').pop()||'page';
+    base=base.replace(/\\.html$/i,'');
+    var name=prompt('Ten file moi:',base+'_edited.html');
+    if(!name)return;
+    if(!name.endsWith('.html'))name+='.html';
+    var html=getCleanHtml();
+    downloadHtml(html,name);
+  });
+
+  closeBtn.addEventListener('click',function(){
+    if(history.length&&!confirm('Ban da xoa '+history.length+' phan tu. Dong toolbar se mat thay doi chua luu. Tiep tuc?'))return;
+    toolbar.remove();
+    var css=document.getElementById('scanvui-remover-css');
+    if(css)css.remove();
+    document.body.style.cursor='';
+    document.removeEventListener('mouseover',onHover,true);
+    document.removeEventListener('mouseout',onLeave,true);
+    document.removeEventListener('click',onClick,true);
+  });
+
+  document.addEventListener('mouseover',onHover,true);
+  document.addEventListener('mouseout',onLeave,true);
+  document.addEventListener('click',onClick,true);
+  updateCount();
+})();
+</script>`;
     
     // Insert before </body> or at end
     if (html.includes('</body>')) {
-      html = html.replace('</body>', offlineScript + '</body>');
+      html = html.replace('</body>', offlineScript + elementRemoverScript + '</body>');
     } else {
-      html += offlineScript;
+      html += offlineScript + elementRemoverScript;
     }
     
     // Add base tag to help with relative resources (optional)
