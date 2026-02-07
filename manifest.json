@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ScanVui",
-  "version": "3.5.2",
+  "version": "3.5.3",
   "description": "Công cụ all-in-one cho web developers: Quét SEO/Accessibility, chụp ảnh toàn trang, tải website offline (hỗ trợ trang cần đăng nhập), quét media, copy selectors!",
   "icons": {
     "16": "icons/icon16.png",

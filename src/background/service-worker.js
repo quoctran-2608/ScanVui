@@ -457,49 +457,97 @@ async function getPageHtmlWithUnhide(tabId) {
       target: { tabId },
       func: () => {
         try {
-          // 1. Remove hidden attribute
-          document.querySelectorAll('[hidden]').forEach(el => el.removeAttribute('hidden'));
+          // === STEP A: HIDE problematic overlapping elements ===
+          // Sidebar, drawer, nav-overlay, off-canvas that may cover main content
+          const hideSelectors = [
+            '[class*="sidebar"]', '[class*="side-bar"]', '[class*="side_bar"]',
+            '[class*="drawer"]', '[class*="offcanvas"]', '[class*="off-canvas"]',
+            '[class*="nav-overlay"]', '[class*="sidenav"]', '[class*="side-nav"]',
+            '[class*="left-panel"]', '[class*="right-panel"]',
+            '.nav-menu', '.mobile-menu', '.hamburger-menu',
+            '[class*="flyout"]', '[class*="slide-menu"]',
+            '[role="navigation"][aria-hidden]'
+          ];
+          const mainContentPatterns = /main|content|article|page|wrapper|app|root/i;
+          
+          document.querySelectorAll(hideSelectors.join(',')).forEach(el => {
+            try {
+              const style = getComputedStyle(el);
+              const cls = (typeof el.className === 'string' ? el.className : '');
+              // Only hide if it's a fixed/absolute positioned sidebar
+              const isFixed = style.position === 'fixed' || style.position === 'absolute';
+              const isOffScreen = parseInt(style.left) < -50 || parseInt(style.right) < -50 ||
+                                  style.transform.includes('translate');
+              const isNarrow = el.offsetWidth > 0 && el.offsetWidth < 400;
+              
+              // If it looks like a sidebar (fixed/absolute, narrow, off-screen or overlapping)
+              if (isFixed && isNarrow && !mainContentPatterns.test(cls)) {
+                el.style.setProperty('display', 'none', 'important');
+              }
+              // If it was hidden but we might accidentally unhide it later
+              if (style.display === 'none' || isOffScreen) {
+                el.setAttribute('data-scanvui-keep-hidden', 'true');
+              }
+            } catch {}
+          });
+          
+          // === STEP B: UNHIDE content panels ===
+          // 1. Remove hidden attribute (but not on sidebar elements)
+          document.querySelectorAll('[hidden]:not([data-scanvui-keep-hidden])').forEach(el => {
+            el.removeAttribute('hidden');
+          });
           
           // 2. Expand <details> elements
           document.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
           
           // 3. Expand Bootstrap/Tailwind collapse
           document.querySelectorAll('.collapse:not(.show), .collapsed').forEach(el => {
+            const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
+            if (/sidebar|drawer|offcanvas|nav|menu/.test(cls)) return;
             el.classList.add('show');
             el.classList.remove('collapsed');
             el.style.setProperty('display', 'block', 'important');
             el.style.setProperty('height', 'auto', 'important');
           });
           
-          // 4. Set aria-expanded to true
+          // 4. Set aria-expanded to true (content triggers only)
           document.querySelectorAll('[aria-expanded="false"]').forEach(el => {
+            const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
+            if (/sidebar|drawer|offcanvas|nav|menu|hamburger/.test(cls)) return;
             el.setAttribute('aria-expanded', 'true');
           });
           
-          // 5. Unhide aria-hidden content panels (not modals)
+          // 5. Unhide aria-hidden content panels (not modals, not sidebars)
+          const skipAria = /modal|overlay|backdrop|popup|lightbox|dialog|sidebar|drawer|offcanvas|nav|menu/i;
           document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
             const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-            if (!/modal|overlay|backdrop|popup|lightbox|dialog/.test(cls)) {
-              el.setAttribute('aria-hidden', 'false');
-              if (el.style) el.style.setProperty('display', 'block', 'important');
-            }
+            if (skipAria.test(cls)) return;
+            el.setAttribute('aria-hidden', 'false');
+            if (el.style) el.style.setProperty('display', 'block', 'important');
           });
           
-          // 6. Targeted unhide for known content patterns (not querySelectorAll('*'))
+          // 6. Targeted unhide for known content patterns
           const contentSelectors = [
-            '[class*="panel"]', '[class*="content"]', '[class*="body"]',
-            '[class*="detail"]', '[class*="answer"]', '[class*="collapse"]',
-            '[class*="accordion"]', '[class*="tab-pane"]', '[class*="tabpanel"]',
-            '[class*="section"]', '[class*="faq"]', '[class*="toggle"]',
+            '[class*="panel"]:not([data-scanvui-keep-hidden])',
+            '[class*="content"]:not([data-scanvui-keep-hidden])',
+            '[class*="body"]:not([data-scanvui-keep-hidden])',
+            '[class*="detail"]:not([data-scanvui-keep-hidden])',
+            '[class*="answer"]:not([data-scanvui-keep-hidden])',
+            '[class*="collapse"]:not([data-scanvui-keep-hidden])',
+            '[class*="accordion"]:not([data-scanvui-keep-hidden])',
+            '[class*="tab-pane"]:not([data-scanvui-keep-hidden])',
+            '[class*="tabpanel"]:not([data-scanvui-keep-hidden])',
+            '[class*="section"]:not([data-scanvui-keep-hidden])',
+            '[class*="faq"]:not([data-scanvui-keep-hidden])',
             '[role="tabpanel"]', '[role="region"]'
           ];
-          const skipPatterns = /dropdown|menu|popup|modal|overlay|tooltip|popover|lightbox|dialog|backdrop|nav-sub|submenu/i;
+          const skipContent = /dropdown|menu|popup|modal|overlay|tooltip|popover|lightbox|dialog|backdrop|nav-sub|submenu|sidebar|drawer|offcanvas/i;
           
           document.querySelectorAll(contentSelectors.join(',')).forEach(el => {
             try {
               const style = getComputedStyle(el);
               const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-              if (skipPatterns.test(cls)) return;
+              if (skipContent.test(cls)) return;
               
               if (style.display === 'none') {
                 el.style.setProperty('display', 'block', 'important');
@@ -527,10 +575,31 @@ async function getPageHtmlWithUnhide(tabId) {
               img.src = lazySrc;
             }
           });
-          // Also handle <source> in <picture>
           document.querySelectorAll('source[data-srcset]').forEach(src => {
             const srcset = src.getAttribute('data-srcset');
             if (srcset) src.setAttribute('srcset', srcset);
+          });
+          
+          // === STEP C: Fix layout for offline viewing ===
+          // Remove fixed positioning from headers/footers
+          document.querySelectorAll('header, footer, [class*="header"], [class*="footer"], [class*="navbar"], [class*="topbar"]').forEach(el => {
+            try {
+              const style = getComputedStyle(el);
+              if (style.position === 'fixed' || style.position === 'sticky') {
+                el.style.setProperty('position', 'relative', 'important');
+              }
+            } catch {}
+          });
+          
+          // Ensure main content is not pushed/offset by sidebar
+          document.querySelectorAll('main, [role="main"], [class*="main-content"], [class*="page-content"], #content, .content').forEach(el => {
+            try {
+              el.style.setProperty('margin-left', '0', 'important');
+              el.style.setProperty('padding-left', '', '');
+              el.style.setProperty('transform', 'none', 'important');
+              el.style.setProperty('width', '100%', 'important');
+              el.style.setProperty('max-width', '100%', 'important');
+            } catch {}
           });
           
         } catch (e) {
@@ -996,6 +1065,52 @@ function processAllPages() {
     // Ensure UTF-8 charset meta tag exists
     if (!html.match(/<meta[^>]+charset/i)) {
       html = html.replace(/<head/i, '<head>\n<meta charset="utf-8">');
+    }
+    
+    // Inject auto-fix CSS for clean offline viewing
+    const fixCss = `
+<style id="scanvui-offline-fix">
+/* ScanVui Offline Layout Fix */
+[data-scanvui-keep-hidden] { display: none !important; }
+body { overflow-x: hidden; }
+/* Hide sidebars, drawers, overlays that may overlap content */
+[class*="sidebar"][style*="position: fixed"],
+[class*="sidebar"][style*="position: absolute"],
+[class*="drawer"], [class*="offcanvas"], [class*="off-canvas"],
+[class*="nav-overlay"], [class*="slide-menu"],
+.modal-backdrop, .overlay, [class*="backdrop"] {
+  display: none !important;
+}
+/* Reset main content to full width */
+main, [role="main"], [class*="main-content"], [class*="page-content"] {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  transform: none !important;
+}
+/* Reset fixed headers/footers to relative */
+header[style*="position: fixed"], header[style*="position: sticky"],
+[class*="navbar"][style*="position: fixed"],
+footer[style*="position: fixed"] {
+  position: relative !important;
+}
+/* Ensure body is not locked (from modal open state) */
+body.modal-open, body.overflow-hidden, body[style*="overflow: hidden"] {
+  overflow: auto !important;
+  padding-right: 0 !important;
+}
+/* Reset any transform on body */
+body[style*="transform"] { transform: none !important; }
+</style>`;
+    
+    // Insert fix CSS into <head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', fixCss + '</head>');
+    } else if (html.includes('<body')) {
+      html = html.replace(/<body/i, fixCss + '<body');
     }
     
     // Add base tag to help with relative resources (optional)
