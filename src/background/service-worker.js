@@ -1432,17 +1432,38 @@ function downloadHtml(html,fn){
 var b=new Blob([html],{type:'text/html;charset=utf-8'});
 var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fn;a.click();URL.revokeObjectURL(a.href);
 }
+var savedFileHandle=null;
+async function saveDirectly(html,fn){
+try{
+  if(window.showSaveFilePicker){
+    if(!savedFileHandle){
+      savedFileHandle=await window.showSaveFilePicker({suggestedName:fn,types:[{description:'HTML',accept:{'text/html':['.html','.htm']}}]});
+    }
+    var writable=await savedFileHandle.createWritable();
+    await writable.write(html);
+    await writable.close();
+    info.textContent='Da luu truc tiep!';
+    changed=false;
+    return;
+  }
+}catch(e){
+  if(e.name==='AbortError')return;
+  savedFileHandle=null;
+}
+downloadHtml(html,fn);changed=false;
+}
 btnSave.onclick=function(){
 var html=getCleanHtml();
 var fn=location.pathname.split('/').pop()||'index.html';
-downloadHtml(html,fn);changed=false;
+saveDirectly(html,fn);
 };
 btnSaveAs.onclick=function(){
+savedFileHandle=null;
+var html=getCleanHtml();
 var base=location.pathname.split('/').pop()||'page';
 base=base.replace(/\\.html$/i,'');
-var name=prompt('Ten file moi:',base+'_edited.html');
-if(!name)return;if(!name.endsWith('.html'))name+='.html';
-downloadHtml(getCleanHtml(),name);changed=false;
+var fn=base+'_edited.html';
+saveDirectly(html,fn);
 };
 btnClose.onclick=function(){
 if(changed&&!confirm('Co thay doi chua luu. Dong editor?'))return;
