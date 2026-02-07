@@ -491,6 +491,42 @@ async function getPageHtmlWithUnhide(tabId) {
             } catch {}
           });
           
+          // STEP A2: Detect and hide ANY nav element that overlaps content (for Google Sites etc.)
+          document.querySelectorAll('nav').forEach(nav => {
+            try {
+              const style = getComputedStyle(nav);
+              const pos = style.position;
+              // Hide nav elements that are fixed/absolute positioned (typically side navs)
+              if (pos === 'fixed' || pos === 'absolute') {
+                nav.setAttribute('data-scanvui-keep-hidden', 'true');
+                nav.style.setProperty('display', 'none', 'important');
+              }
+            } catch {}
+          });
+          
+          // STEP A3: Hide ALL fixed-position divs that are full-width overlays or narrow sidebars
+          document.querySelectorAll('div').forEach(el => {
+            try {
+              const style = getComputedStyle(el);
+              if (style.position !== 'fixed') return;
+              const zIndex = parseInt(style.zIndex);
+              if (isNaN(zIndex) || zIndex < 50) return;
+              // High z-index fixed elements are typically headers/overlays
+              const h = el.offsetHeight;
+              const w = el.offsetWidth;
+              // Narrow fixed = sidebar; short full-width = header bar
+              if ((w > 0 && w < 350) || (h > 0 && h < 80 && w > 500)) {
+                el.style.setProperty('position', 'relative', 'important');
+                el.style.setProperty('z-index', '0', 'important');
+              }
+            } catch {}
+          });
+          
+          // STEP A4: Remove browser extension elements
+          document.querySelectorAll('savior-host, en2vi-host, [class*="--savior"], [class*="corom-element"]').forEach(el => {
+            el.remove();
+          });
+          
           // === STEP B: UNHIDE content panels ===
           // 1. Remove hidden attribute (but not on sidebar elements)
           document.querySelectorAll('[hidden]:not([data-scanvui-keep-hidden])').forEach(el => {
@@ -581,13 +617,30 @@ async function getPageHtmlWithUnhide(tabId) {
           });
           
           // === STEP C: Fix layout for offline viewing ===
-          // Remove fixed positioning from headers/footers
+          // Remove fixed positioning from headers/footers and their children
           document.querySelectorAll('header, footer, [class*="header"], [class*="footer"], [class*="navbar"], [class*="topbar"]').forEach(el => {
             try {
               const style = getComputedStyle(el);
               if (style.position === 'fixed' || style.position === 'sticky') {
                 el.style.setProperty('position', 'relative', 'important');
               }
+              // Also fix child divs with inline position:fixed
+              el.querySelectorAll('[style*="position"]').forEach(child => {
+                try {
+                  const cs = getComputedStyle(child);
+                  if (cs.position === 'fixed' || cs.position === 'sticky') {
+                    child.style.setProperty('position', 'relative', 'important');
+                    child.style.setProperty('z-index', '0', 'important');
+                  }
+                } catch {}
+              });
+            } catch {}
+          });
+          
+          // Remove role="banner" fixed elements (Google Sites header pattern)
+          document.querySelectorAll('[role="banner"]').forEach(el => {
+            try {
+              el.style.setProperty('position', 'relative', 'important');
             } catch {}
           });
           
@@ -600,6 +653,14 @@ async function getPageHtmlWithUnhide(tabId) {
               el.style.setProperty('width', '100%', 'important');
               el.style.setProperty('max-width', '100%', 'important');
             } catch {}
+          });
+          
+          // Remove jsaction/jscontroller attributes that cause JS errors offline
+          document.querySelectorAll('[jsaction], [jscontroller], [jsmodel], [jsshadow]').forEach(el => {
+            el.removeAttribute('jsaction');
+            el.removeAttribute('jscontroller');
+            el.removeAttribute('jsmodel');
+            el.removeAttribute('jsshadow');
           });
           
         } catch (e) {
@@ -1019,6 +1080,17 @@ function processAllPages() {
     // Remove all script tags - content is already "baked" with unhidden state
     html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
     
+    // Remove browser extension elements (savior, en2vi, etc.)
+    html = html.replace(/<savior-host[^>]*>[\s\S]*?<\/savior-host>/gi, '');
+    html = html.replace(/<en2vi-host[^>]*>[\s\S]*?<\/en2vi-host>/gi, '');
+    html = html.replace(/<[^>]+class="[^"]*corom-element[^"]*"[^>]*>[\s\S]*?<\/[^>]+>/gi, '');
+    
+    // Remove browser extension CSS (--savior styles, etc.)
+    html = html.replace(/<style[^>]*>[\s\S]*?--savior[\s\S]*?<\/style>/gi, '');
+    
+    // Remove jsaction/jscontroller/jsmodel attributes that cause JS errors offline
+    html = html.replace(/\s+(jsaction|jscontroller|jsmodel|jsname|jsshadow|jsslot)="[^"]*"/gi, '');
+    
     // Inject lightweight offline toggle script (for any remaining interactive elements)
     const offlineScript = `
 <script>
@@ -1072,13 +1144,17 @@ function processAllPages() {
 <style id="scanvui-offline-fix">
 /* ScanVui Offline Layout Fix */
 [data-scanvui-keep-hidden] { display: none !important; }
-body { overflow-x: hidden; }
+body { overflow-x: hidden; overflow-y: auto !important; }
 /* Hide sidebars, drawers, overlays that may overlap content */
 [class*="sidebar"][style*="position: fixed"],
 [class*="sidebar"][style*="position: absolute"],
 [class*="drawer"], [class*="offcanvas"], [class*="off-canvas"],
 [class*="nav-overlay"], [class*="slide-menu"],
 .modal-backdrop, .overlay, [class*="backdrop"] {
+  display: none !important;
+}
+/* Hide browser extension elements */
+savior-host, en2vi-host, [class*="--savior"], [class*="corom-element"] {
   display: none !important;
 }
 /* Reset main content to full width */
@@ -1091,19 +1167,40 @@ main, [role="main"], [class*="main-content"], [class*="page-content"] {
   max-width: 100% !important;
   transform: none !important;
 }
-/* Reset fixed headers/footers to relative */
+/* Reset ALL position:fixed to relative (critical for JS-heavy sites) */
 header[style*="position: fixed"], header[style*="position: sticky"],
 [class*="navbar"][style*="position: fixed"],
-footer[style*="position: fixed"] {
+footer[style*="position: fixed"],
+[role="banner"], [role="banner"] > div[style*="position"],
+div[style*="position: fixed"][style*="z-index"] {
+  position: relative !important;
+  z-index: auto !important;
+}
+/* Google Sites specific: hide side nav, hamburger, fixed header overlays */
+nav[role="navigation"] {
+  position: relative !important;
+  display: none !important;
+}
+/* Google Sites hamburger/toggle button */
+div[title*="thanh bên"], div[title*="sidebar"], div[aria-label*="navigation"] {
+  display: none !important;
+}
+/* Google Sites top nav bar - make it relative instead of fixed */
+div[data-top-navigation] {
   position: relative !important;
 }
-/* Ensure body is not locked (from modal open state) */
+/* Ensure body is not locked */
 body.modal-open, body.overflow-hidden, body[style*="overflow: hidden"] {
   overflow: auto !important;
   padding-right: 0 !important;
 }
 /* Reset any transform on body */
 body[style*="transform"] { transform: none !important; }
+/* Remove extra spacing from hidden side nav */
+body > div > div > div {
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
 </style>`;
     
     // Insert fix CSS into <head>
