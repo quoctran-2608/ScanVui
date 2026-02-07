@@ -212,13 +212,16 @@ async function startCrawlerInBackground(tabId, startUrl, settings) {
     crawlerTabId: null, // Separate tab for crawling (preserves user's tab)
     settings: {
       depth: Math.min(settings.depth || 2, 10),
-      maxPages: Math.min(settings.maxPages || 50, 1000)
+      maxPages: Math.min(settings.maxPages || 50, 1000),
+      keepJs: !!settings.keepJs
     },
     visited: new Set(),
     queue: [{ url: startUrl, depth: 0 }],
     pages: [],
     pendingImages: [],
     downloadedImages: new Map(),
+    pendingScripts: [],
+    downloadedScripts: new Map(),
     pageCount: 0,
     imageCount: 0,
     currentUrl: '',
@@ -395,6 +398,12 @@ async function executeCrawler() {
     updateProgress('Đang phân tích hình ảnh...', 78);
     collectImageUrls();
     console.log(`[ScanVui] Found ${crawlerState.pendingImages.length} images`);
+
+    // Step 3b: Collect JS URLs (if keepJs enabled)
+    if (crawlerState.settings.keepJs) {
+      collectJsUrls();
+      console.log(`[ScanVui] Found ${crawlerState.pendingScripts.length} scripts (keepJs=true)`);
+    }
 
     // Step 4: Process HTML (replace URLs)
     updateProgress('Đang xử lý HTML...', 82);
@@ -860,6 +869,44 @@ function getImageExtension(url) {
   return 'jpg';
 }
 
+// Tracking/analytics script patterns to always remove
+const TRACKING_PATTERNS = /google-analytics|googletagmanager|gtag\/js|analytics|facebook\.net|fbevents|pixel|hotjar|mixpanel|segment\.com|amplitude|sentry|bugsnag|newrelic|optimizely|crazyegg|mouseflow|fullstory|clarity\.ms|doubleclick|adsense|adsbygoogle|googlesyndication|chartbeat|parsely|omtrdc|demdex|2o7\.net|tealium|onetrust|cookiebot|cookie-consent|gdpr/i;
+
+function collectJsUrls() {
+  if (!crawlerState.settings.keepJs) return;
+  
+  const jsUrls = new Set();
+  const MAX_SCRIPTS = 100;
+  
+  for (const page of crawlerState.pages) {
+    if (jsUrls.size >= MAX_SCRIPTS) break;
+    
+    // Match <script src="...">
+    const scriptRegex = /<script[^>]+src=["']([^"']+)/gi;
+    let match;
+    while ((match = scriptRegex.exec(page.html)) !== null && jsUrls.size < MAX_SCRIPTS) {
+      try {
+        const src = match[1].trim();
+        if (src.startsWith('data:') || src.length > 500) continue;
+        // Skip tracking/analytics scripts
+        if (TRACKING_PATTERNS.test(src)) continue;
+        const absoluteUrl = new URL(src, page.url).href;
+        if (absoluteUrl.startsWith('http')) {
+          jsUrls.add(absoluteUrl);
+        }
+      } catch {}
+    }
+  }
+  
+  let index = 0;
+  for (const url of jsUrls) {
+    const filename = `js/script_${index}.js`;
+    crawlerState.downloadedScripts.set(url, filename);
+    crawlerState.pendingScripts.push({ url, filename });
+    index++;
+  }
+}
+
 function processAllPages() {
   console.log(`[ScanVui] Processing ${crawlerState.pages.length} pages for link replacement`);
   
@@ -1006,9 +1053,40 @@ function processAllPages() {
       return match;
     });
     
-    // Remove problematic scripts (tracking, analytics, external) but keep basic structure
-    // Remove all script tags - content is already "baked" with unhidden state
-    html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    // Handle JavaScript based on keepJs setting
+    if (crawlerState.settings.keepJs) {
+      // Keep JS but remove tracking/analytics scripts
+      html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, (match) => {
+        // Check if it's a tracking/analytics script
+        const srcMatch = match.match(/src=["']([^"']+)/i);
+        if (srcMatch && TRACKING_PATTERNS.test(srcMatch[1])) return '';
+        // Check inline tracking code
+        if (TRACKING_PATTERNS.test(match)) return '';
+        // Replace external script URLs with local paths
+        if (srcMatch) {
+          const src = srcMatch[1];
+          try {
+            const absoluteUrl = new URL(src, page.url).href;
+            if (crawlerState.downloadedScripts.has(absoluteUrl)) {
+              return match.replace(src, crawlerState.downloadedScripts.get(absoluteUrl));
+            }
+            // Also try the raw src
+            if (crawlerState.downloadedScripts.has(src)) {
+              return match.replace(src, crawlerState.downloadedScripts.get(src));
+            }
+            // Try protocol-relative
+            const protoRel = absoluteUrl.replace(/^https?:/, '');
+            if (crawlerState.downloadedScripts.has(protoRel)) {
+              return match.replace(src, crawlerState.downloadedScripts.get(protoRel));
+            }
+          } catch {}
+        }
+        return match; // Keep script as-is (inline or already local)
+      });
+    } else {
+      // Remove all scripts (original behavior)
+      html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    }
     
     // Inject lightweight offline toggle script (for any remaining interactive elements)
     const offlineScript = `
@@ -1596,6 +1674,37 @@ async function downloadAllFiles() {
   }
   
   console.log(`[ScanVui] === IMAGES: ${imagesDownloaded}/${totalImages} ===`);
+  
+  // Download JS files (if keepJs enabled)
+  let scriptsDownloaded = 0;
+  if (crawlerState.settings.keepJs && crawlerState.pendingScripts.length > 0) {
+    const totalScripts = crawlerState.pendingScripts.length;
+    console.log(`[ScanVui] Downloading ${totalScripts} JS files...`);
+    
+    for (let i = 0; i < crawlerState.pendingScripts.length; i++) {
+      if (crawlerAbortController?.signal?.aborted) break;
+      
+      const script = crawlerState.pendingScripts[i];
+      
+      try {
+        const response = await fetchUrlWithRetry(script.url, { responseType: 'base64', timeout: 10000 });
+        
+        if (response.base64 && response.size < 5 * 1024 * 1024) {
+          const dataUrl = `data:application/javascript;base64,${response.base64}`;
+          await downloadPromise(dataUrl, `${folderName}/${script.filename}`);
+          scriptsDownloaded++;
+        }
+      } catch (e) {}
+      
+      if (i % 5 === 0) {
+        updateProgress(`JS ${i+1}/${totalScripts}`, 97 + (i / totalScripts) * 2);
+      }
+      await delay(50);
+    }
+    
+    console.log(`[ScanVui] === SCRIPTS: ${scriptsDownloaded}/${totalScripts} ===`);
+  }
+  
   console.log(`[ScanVui] === COMPLETE ===`);
   
   crawlerState.pendingImages = [];

@@ -1353,6 +1353,7 @@ class ScanVuiApp {
 
       const depth = parseInt(document.getElementById('crawlerDepth')?.value) || 2;
       const maxPages = parseInt(document.getElementById('crawlerMaxPages')?.value) || 50;
+      const keepJs = document.getElementById('crawlerKeepJs')?.checked || false;
       
       // Show progress UI immediately
       this.showCrawlerRunning();
@@ -1362,7 +1363,7 @@ class ScanVuiApp {
         action: 'startCrawler',
         tabId: tab.id,
         startUrl: tab.url,
-        settings: { depth, maxPages }
+        settings: { depth, maxPages, keepJs }
       });
 
       if (response.error) {
