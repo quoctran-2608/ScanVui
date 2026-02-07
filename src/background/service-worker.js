@@ -155,6 +155,7 @@ async function handleMessage(request, sender, sendResponse) {
           sendResponse({ error: 'No pages available' });
         }
         break;
+        break;
 
       default:
         sendResponse({ error: 'Unknown action' });
@@ -293,19 +294,6 @@ async function executeCrawler() {
       throw new Error('Không thể tạo tab để crawl: ' + e.message);
     }
 
-    // Step 2b: Re-capture main page with unhide on crawler tab
-    try {
-      const unhiddenResult = await getPageHtmlViaTab(crawlerState.crawlerTabId, startUrl, 15000);
-      if (unhiddenResult && unhiddenResult.html) {
-        crawlerState.pages[0].html = unhiddenResult.html;
-        if (unhiddenResult.title) {
-          crawlerState.pages[0].title = decodeHtmlEntities(unhiddenResult.title);
-        }
-      }
-    } catch {
-      // Fall back to original HTML if unhide fails
-    }
-
     // Step 3: Crawl child pages using tab navigation (with auth cookies)
     try {
       while (crawlerState.queue.length > 0) {
@@ -396,16 +384,12 @@ async function executeCrawler() {
     collectImageUrls();
     console.log(`[ScanVui] Found ${crawlerState.pendingImages.length} images`);
 
-    // Step 4: Fetch and inline CSS
-    updateProgress('Đang tải CSS...', 80);
-    await inlineCssForPages();
-
-    // Step 5: Process HTML (replace URLs)
+    // Step 4: Process HTML (replace URLs)
     updateProgress('Đang xử lý HTML...', 82);
     processAllPages();
     console.log(`[ScanVui] Processed HTML for ${crawlerState.pages.length} pages`);
 
-    // Step 6: Download everything
+    // Step 5: Download everything
     updateProgress('Đang lưu files...', 85);
     await downloadAllFiles();
     console.log(`[ScanVui] Download phase complete`);
@@ -441,108 +425,71 @@ async function getPageHtmlFromTab(tabId) {
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
-      func: () => document.documentElement.outerHTML
-    });
-    return results?.[0]?.result || null;
-  } catch (e) {
-    console.error('getPageHtmlFromTab error:', e);
-    return null;
-  }
-}
-
-// Unhide hidden content and capture HTML (only use on crawler tab, NOT user's tab)
-async function getPageHtmlWithUnhide(tabId) {
-  try {
-    const results = await chrome.scripting.executeScript({
-      target: { tabId },
       func: () => {
-        try {
-          // 1. Remove hidden attribute
-          document.querySelectorAll('[hidden]').forEach(el => el.removeAttribute('hidden'));
-          
-          // 2. Expand <details> elements
-          document.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
-          
-          // 3. Expand Bootstrap/Tailwind collapse
-          document.querySelectorAll('.collapse:not(.show), .collapsed').forEach(el => {
-            el.classList.add('show');
-            el.classList.remove('collapsed');
+        // Expand/unhide all hidden content before capturing
+        // 1. Remove hidden attribute
+        document.querySelectorAll('[hidden]').forEach(el => el.removeAttribute('hidden'));
+        
+        // 2. Force show elements with display:none or visibility:hidden (content containers only)
+        document.querySelectorAll('*').forEach(el => {
+          const style = getComputedStyle(el);
+          const tag = el.tagName.toLowerCase();
+          // Skip script, style, meta elements
+          if (['script', 'style', 'link', 'meta', 'head', 'noscript'].includes(tag)) return;
+          // Only unhide elements that look like content containers
+          if (style.display === 'none' && el.children.length >= 0) {
+            // Check if this is a content panel (not a popup/modal/overlay)
+            const classes = el.className.toLowerCase();
+            const id = (el.id || '').toLowerCase();
+            const isContentPanel = /panel|content|body|text|detail|answer|collapse|accordion|tab-pane|section/
+              .test(classes + ' ' + id);
+            const isDropdown = /dropdown|menu|popup|modal|overlay|tooltip|popover|lightbox|dialog|backdrop/
+              .test(classes + ' ' + id);
+            if (isContentPanel || (!isDropdown && el.textContent.trim().length > 20)) {
+              el.style.display = '';
+              el.style.setProperty('display', 'block', 'important');
+            }
+          }
+          if (style.visibility === 'hidden') {
+            el.style.setProperty('visibility', 'visible', 'important');
+          }
+          // 3. Expand collapsed height (max-height: 0)
+          if (style.maxHeight === '0px' || style.maxHeight === '0') {
+            el.style.setProperty('max-height', 'none', 'important');
+          }
+          if (style.overflow === 'hidden' && style.maxHeight !== 'none' && parseInt(style.maxHeight) < 50) {
+            el.style.setProperty('max-height', 'none', 'important');
+            el.style.setProperty('overflow', 'visible', 'important');
+          }
+        });
+        
+        // 4. Expand <details> elements
+        document.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
+        
+        // 5. Mark aria-expanded as true, aria-hidden as false
+        document.querySelectorAll('[aria-expanded="false"]').forEach(el => el.setAttribute('aria-expanded', 'true'));
+        document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
+          const classes = el.className.toLowerCase();
+          if (!/modal|overlay|backdrop|popup|lightbox|dialog/.test(classes)) {
+            el.setAttribute('aria-hidden', 'false');
             el.style.setProperty('display', 'block', 'important');
-            el.style.setProperty('height', 'auto', 'important');
-          });
-          
-          // 4. Set aria-expanded to true
-          document.querySelectorAll('[aria-expanded="false"]').forEach(el => {
-            el.setAttribute('aria-expanded', 'true');
-          });
-          
-          // 5. Unhide aria-hidden content panels (not modals)
-          document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
-            const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-            if (!/modal|overlay|backdrop|popup|lightbox|dialog/.test(cls)) {
-              el.setAttribute('aria-hidden', 'false');
-              if (el.style) el.style.setProperty('display', 'block', 'important');
-            }
-          });
-          
-          // 6. Targeted unhide for known content patterns (not querySelectorAll('*'))
-          const contentSelectors = [
-            '[class*="panel"]', '[class*="content"]', '[class*="body"]',
-            '[class*="detail"]', '[class*="answer"]', '[class*="collapse"]',
-            '[class*="accordion"]', '[class*="tab-pane"]', '[class*="tabpanel"]',
-            '[class*="section"]', '[class*="faq"]', '[class*="toggle"]',
-            '[role="tabpanel"]', '[role="region"]'
-          ];
-          const skipPatterns = /dropdown|menu|popup|modal|overlay|tooltip|popover|lightbox|dialog|backdrop|nav-sub|submenu/i;
-          
-          document.querySelectorAll(contentSelectors.join(',')).forEach(el => {
-            try {
-              const style = getComputedStyle(el);
-              const cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-              if (skipPatterns.test(cls)) return;
-              
-              if (style.display === 'none') {
-                el.style.setProperty('display', 'block', 'important');
-              }
-              if (style.maxHeight === '0px' || style.maxHeight === '0') {
-                el.style.setProperty('max-height', 'none', 'important');
-              }
-              if (style.overflow === 'hidden' && parseInt(style.maxHeight) < 50) {
-                el.style.setProperty('max-height', 'none', 'important');
-                el.style.setProperty('overflow', 'visible', 'important');
-              }
-              if (style.visibility === 'hidden') {
-                el.style.setProperty('visibility', 'visible', 'important');
-              }
-              if (parseFloat(style.opacity) === 0) {
-                el.style.setProperty('opacity', '1', 'important');
-              }
-            } catch {}
-          });
-          
-          // 7. Convert lazy-load images (data-src -> src)
-          document.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original]').forEach(img => {
-            const lazySrc = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original');
-            if (lazySrc && !img.src.startsWith('http')) {
-              img.src = lazySrc;
-            }
-          });
-          // Also handle <source> in <picture>
-          document.querySelectorAll('source[data-srcset]').forEach(src => {
-            const srcset = src.getAttribute('data-srcset');
-            if (srcset) src.setAttribute('srcset', srcset);
-          });
-          
-        } catch (e) {
-          console.error('Unhide error:', e);
-        }
+          }
+        });
+        
+        // 6. Expand Bootstrap/Tailwind collapse
+        document.querySelectorAll('.collapse:not(.show), .collapsed').forEach(el => {
+          el.classList.add('show');
+          el.classList.remove('collapsed', 'collapse');
+          el.style.setProperty('display', 'block', 'important');
+          el.style.setProperty('height', 'auto', 'important');
+        });
         
         return document.documentElement.outerHTML;
       }
     });
     return results?.[0]?.result || null;
   } catch (e) {
-    console.error('getPageHtmlWithUnhide error:', e);
+    console.error('getPageHtmlFromTab error:', e);
     return null;
   }
 }
@@ -565,12 +512,10 @@ async function getPageHtmlViaTab(tabId, url, timeoutMs = 15000) {
     let settled = false;
     let timer = null;
     let listener = null;
-    let renderTimer = null;
 
     const cleanup = () => {
-      if (timer) { clearTimeout(timer); timer = null; }
-      if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
-      if (listener) { chrome.tabs.onUpdated.removeListener(listener); listener = null; }
+      if (timer) clearTimeout(timer);
+      if (listener) chrome.tabs.onUpdated.removeListener(listener);
     };
 
     const settle = (value, error) => {
@@ -583,7 +528,7 @@ async function getPageHtmlViaTab(tabId, url, timeoutMs = 15000) {
 
     timer = setTimeout(() => {
       // Timeout - try to get whatever HTML is available
-      getPageHtmlWithUnhide(tabId).then(html => {
+      getPageHtmlFromTab(tabId).then(html => {
         if (html) {
           getPageTitle(tabId).then(title => {
             settle({ html, title: title || 'Untitled' });
@@ -595,19 +540,18 @@ async function getPageHtmlViaTab(tabId, url, timeoutMs = 15000) {
     }, timeoutMs);
 
     listener = (updatedTabId, changeInfo) => {
-      if (updatedTabId !== tabId || settled) return;
+      if (updatedTabId !== tabId) return;
       if (changeInfo.status === 'complete') {
-        // Small delay to let JS render, but cancel if already settled
-        renderTimer = setTimeout(async () => {
-          if (settled) return;
+        // Small delay to let JS render
+        setTimeout(async () => {
           try {
-            const html = await getPageHtmlWithUnhide(tabId);
+            const html = await getPageHtmlFromTab(tabId);
             const title = await getPageTitle(tabId);
             settle({ html, title });
           } catch (e) {
             settle(null, e);
           }
-        }, 800);
+        }, 500);
       }
     };
 
@@ -680,19 +624,6 @@ function collectImageUrls() {
         }
       } catch {}
     }
-    
-    // Also collect background-image URLs from inline styles
-    const bgRegex = /background(?:-image)?\s*:\s*url\(\s*["']?([^"')]+)/gi;
-    while ((match = bgRegex.exec(page.html)) !== null && imageUrls.size < MAX_IMAGES) {
-      try {
-        const src = match[1].trim();
-        if (src.startsWith('data:') || src.length > 500) continue;
-        const absoluteUrl = new URL(src, page.url).href;
-        if (absoluteUrl.startsWith('http')) {
-          imageUrls.add(absoluteUrl);
-        }
-      } catch {}
-    }
   }
 
   // Create filename mapping
@@ -703,88 +634,6 @@ function collectImageUrls() {
     crawlerState.downloadedImages.set(url, filename);
     crawlerState.pendingImages.push({ url, filename });
     index++;
-  }
-}
-
-// Collect CSS URLs from all pages
-function collectCssUrls() {
-  const cssUrls = new Set();
-  
-  for (const page of crawlerState.pages) {
-    const linkRegex = /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["']/gi;
-    const linkRegex2 = /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']stylesheet["']/gi;
-    let match;
-    
-    for (const regex of [linkRegex, linkRegex2]) {
-      while ((match = regex.exec(page.html)) !== null) {
-        try {
-          const href = match[1].trim();
-          if (href.startsWith('data:') || href.length > 500) continue;
-          const absoluteUrl = new URL(href, page.url).href;
-          if (absoluteUrl.startsWith('http')) {
-            cssUrls.add(absoluteUrl);
-          }
-        } catch {}
-      }
-    }
-  }
-  
-  return [...cssUrls];
-}
-
-// Fetch and inline CSS into HTML
-async function inlineCssForPages() {
-  const cssUrls = collectCssUrls();
-  if (cssUrls.length === 0) return;
-  
-  console.log(`[ScanVui] Fetching ${cssUrls.length} CSS files to inline`);
-  
-  const cssCache = new Map();
-  const MAX_CSS = 30;
-  
-  for (let i = 0; i < Math.min(cssUrls.length, MAX_CSS); i++) {
-    try {
-      const response = await fetchUrlWithRetry(cssUrls[i], { timeout: 8000 });
-      if (response.text && response.text.length < 500000) {
-        cssCache.set(cssUrls[i], response.text);
-      }
-    } catch {}
-    await delay(50);
-  }
-  
-  console.log(`[ScanVui] Fetched ${cssCache.size} CSS files`);
-  
-  // Inline CSS into each page
-  for (const page of crawlerState.pages) {
-    let html = page.html;
-    
-    // Replace <link rel="stylesheet" href="..."> with <style>content</style>
-    html = html.replace(/<link[^>]+rel=["']stylesheet["'][^>]*>/gi, (linkTag) => {
-      const hrefMatch = linkTag.match(/href=["']([^"']+)["']/);
-      if (!hrefMatch) return linkTag;
-      
-      try {
-        const absoluteUrl = new URL(hrefMatch[1].trim(), page.url).href;
-        if (cssCache.has(absoluteUrl)) {
-          return `<style>/* ${hrefMatch[1]} */\n${cssCache.get(absoluteUrl)}</style>`;
-        }
-      } catch {}
-      
-      return linkTag;
-    });
-    
-    // Also handle reverse order <link href="..." rel="stylesheet">
-    html = html.replace(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']stylesheet["'][^>]*>/gi, (linkTag, href) => {
-      try {
-        const absoluteUrl = new URL(href.trim(), page.url).href;
-        if (cssCache.has(absoluteUrl)) {
-          return `<style>/* ${href} */\n${cssCache.get(absoluteUrl)}</style>`;
-        }
-      } catch {}
-      return linkTag;
-    });
-    
-    page.html = html;
   }
 }
 
@@ -953,37 +802,24 @@ function processAllPages() {
     // Inject lightweight offline toggle script (for any remaining interactive elements)
     const offlineScript = `
 <script>
-(function(){
-  // Toggle click handler for interactive elements
-  document.addEventListener('click', function(e) {
-    // Handle <details>/<summary> natively
-    var summary = e.target.closest('summary');
-    if (summary) return; // Let browser handle natively
-    
-    // Handle toggle buttons
-    var t = e.target.closest('[data-toggle],[data-bs-toggle],[role="tab"],[role="button"],.accordion-header,.accordion-button,.collapsible,.toggle-btn,.expandable');
-    if (!t) return;
-    
-    e.preventDefault();
-    
-    // Find target panel
-    var targetSel = t.getAttribute('data-target') || t.getAttribute('data-bs-target') || t.getAttribute('aria-controls');
-    var href = t.getAttribute('href');
-    if (!targetSel && href && href.startsWith('#')) targetSel = href;
-    
-    var panel = null;
-    if (targetSel) {
-      try { panel = document.querySelector(targetSel.startsWith('#') ? targetSel : '#' + targetSel); } catch(ex){}
+document.addEventListener('click', function(e) {
+  var t = e.target.closest('[data-toggle],[data-bs-toggle],summary,.accordion-header,.collapsible,.toggle-btn,[role="tab"],[role="button"]');
+  if (!t) return;
+  var target = t.getAttribute('data-target') || t.getAttribute('data-bs-target') || t.getAttribute('href');
+  if (target && target.startsWith('#')) {
+    var panel = document.querySelector(target);
+    if (panel) {
+      var isHidden = panel.style.display === 'none' || !panel.offsetHeight;
+      panel.style.display = isHidden ? 'block' : 'none';
+      t.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
     }
-    if (!panel) panel = t.nextElementSibling;
-    if (!panel) return;
-    
-    var isHidden = panel.style.display === 'none' || getComputedStyle(panel).display === 'none';
-    panel.style.display = isHidden ? 'block' : 'none';
-    t.setAttribute('aria-expanded', String(isHidden));
-    t.classList.toggle('collapsed', !isHidden);
-  });
-})();
+  }
+  var next = t.nextElementSibling;
+  if (next && next.children.length > 0) {
+    var isHidden = next.style.display === 'none' || !next.offsetHeight;
+    next.style.display = isHidden ? 'block' : 'none';
+  }
+});
 </script>`;
     
     // Insert before </body> or at end
@@ -991,11 +827,6 @@ function processAllPages() {
       html = html.replace('</body>', offlineScript + '</body>');
     } else {
       html += offlineScript;
-    }
-    
-    // Ensure UTF-8 charset meta tag exists
-    if (!html.match(/<meta[^>]+charset/i)) {
-      html = html.replace(/<head/i, '<head>\n<meta charset="utf-8">');
     }
     
     // Add base tag to help with relative resources (optional)
